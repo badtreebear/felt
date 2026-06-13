@@ -4,6 +4,14 @@ export function createRangeGrid({ range, heroCards }) {
   const wrapper = document.createElement("div");
   wrapper.className = "range-grid-wrap";
 
+  if (!range.chartAvailable) {
+    const summary = document.createElement("p");
+    summary.className = "range-verdict range-verdict--neutral";
+    summary.textContent = range.message || "No RFI chart for this position yet.";
+    wrapper.append(summary, createRangeSource(range));
+    return wrapper;
+  }
+
   const verdict = heroRangeVerdict(heroCards, range.grid);
   const summary = document.createElement("p");
   summary.className = "range-verdict";
@@ -21,29 +29,30 @@ export function createRangeGrid({ range, heroCards }) {
       const label = rangeCellLabel(row, column);
       cell.className = "range-cell";
       cell.classList.toggle("range-cell--open", value === 1);
-      cell.classList.toggle("range-cell--mixed", value === 0.5);
+      cell.classList.toggle("range-cell--mixed", value > 0 && value < 1);
       cell.classList.toggle("range-cell--hero", verdict.cell?.row === row && verdict.cell?.column === column);
+      cell.style.setProperty("--range-frequency", value);
       cell.setAttribute("role", "gridcell");
-      cell.setAttribute("aria-label", `${label} ${value ? "open" : "fold"}`);
+      cell.setAttribute("aria-label", `${label} ${rangeCellStatus(value)}`);
       cell.textContent = label;
       grid.append(cell);
     });
   });
 
-  wrapper.append(summary, grid);
+  wrapper.append(summary, grid, createRangeSource(range));
   return wrapper;
 }
 
 export function heroRangeVerdict(heroCards, grid) {
   const cell = handCell(heroCards);
   const handLabel = cell ? rangeCellLabel(cell.row, cell.column) : "--";
-  const value = cell ? grid[cell.row][cell.column] : 0;
+  const value = cell && grid ? grid[cell.row][cell.column] : 0;
 
   if (value === 1) {
     return { cell, handLabel, status: "in range" };
   }
 
-  if (value === 0.5) {
+  if (value > 0 && value < 1) {
     return { cell, handLabel, status: "mixed" };
   }
 
@@ -91,4 +100,34 @@ export function rangeCellLabel(row, column) {
   }
 
   return `${RANKS[column]}${RANKS[row]}o`;
+}
+
+function createRangeSource(range) {
+  const footer = document.createElement("p");
+  footer.className = "range-source";
+
+  if (range.source && range.url) {
+    const link = document.createElement("a");
+    link.href = range.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = range.source;
+    footer.append("Source: ", link);
+    return footer;
+  }
+
+  footer.textContent = range.source ? `Source: ${range.source}` : "Source unavailable";
+  return footer;
+}
+
+function rangeCellStatus(value) {
+  if (value === 1) {
+    return "open";
+  }
+
+  if (value > 0 && value < 1) {
+    return `${Math.round(value * 100)}% open`;
+  }
+
+  return "fold";
 }

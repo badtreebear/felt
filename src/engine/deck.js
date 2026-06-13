@@ -84,9 +84,9 @@ export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2)
   const river = deck.splice(0, 1);
   const boardRunout = [...flop, ...turn, ...river];
   const buttonSeat = Math.floor(rng() * players);
-  const sbSeat = (buttonSeat + 1) % players;
-  const bbSeat = (buttonSeat + 2) % players;
-  const postedBlinds = blinds || { sb: 1, bb: 2 };
+  const sbSeat = players === 2 ? buttonSeat : (buttonSeat + 1) % players;
+  const bbSeat = players === 2 ? (buttonSeat + 1) % players : (buttonSeat + 2) % players;
+  const postedBlinds = blinds || { sb: 0.5, bb: 1 };
 
   return {
     seed: handSeed,

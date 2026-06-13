@@ -4,8 +4,10 @@ export const state = {
   config: {
     players: 6,
     heroSeat: 3,
-    blinds: { sb: 1, bb: 2 },
+    blinds: { sb: 0.5, bb: 1 },
+    bbDollarValue: 2,
     stack: 200,
+    seatProfiles: {},
   },
   hand: {
     seed: "",
@@ -19,6 +21,7 @@ export const state = {
     toCall: 0,
     actionLog: [],
     buttonSeat: 0,
+    preflop: null,
   },
   maths: {
     heroEquity: null,
@@ -35,6 +38,9 @@ export const state = {
     openPopover: null,
     openRangeSeat: null,
     revealVillains: false,
+    showProfiles: false,
+    displayUnit: "usd",
+    heroRaiseTo: 2.5,
     spotMode: "dealt",
     speed: "step",
   },

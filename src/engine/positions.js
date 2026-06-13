@@ -2,11 +2,21 @@ const POSITION_BY_BUTTON_ORDER = {
   2: ["BTN/SB", "BB"],
   3: ["BTN", "SB", "BB"],
   4: ["BTN", "SB", "BB", "CO"],
-  5: ["BTN", "SB", "BB", "UTG", "CO"],
-  6: ["BTN", "SB", "BB", "UTG", "MP", "CO"],
-  7: ["BTN", "SB", "BB", "UTG", "MP", "HJ", "CO"],
-  8: ["BTN", "SB", "BB", "UTG", "UTG+1", "MP", "HJ", "CO"],
-  9: ["BTN", "SB", "BB", "UTG", "UTG+1", "LJ", "MP", "HJ", "CO"],
+  5: ["BTN", "SB", "BB", "HJ", "CO"],
+  6: ["BTN", "SB", "BB", "LJ", "HJ", "CO"],
+  7: ["BTN", "SB", "BB", "UTG+2", "LJ", "HJ", "CO"],
+  8: ["BTN", "SB", "BB", "UTG+1", "UTG+2", "LJ", "HJ", "CO"],
+  9: ["BTN", "SB", "BB", "UTG", "UTG+1", "UTG+2", "LJ", "HJ", "CO"],
+};
+
+const RFI_LABEL_BY_POSITION = {
+  UTG: "UTG",
+  "UTG+1": "UTG+1",
+  "UTG+2": "UTG+2",
+  LJ: "LJ",
+  HJ: "HJ",
+  CO: "CO",
+  BTN: "BTN",
 };
 
 export function getSeatPositions({ players, buttonSeat }) {
@@ -25,11 +35,11 @@ export function getSeatPositions({ players, buttonSeat }) {
 }
 
 export function normalizeRangePosition(position) {
-  if (position === "BTN/SB") {
-    return "BTN";
-  }
+  return positionToRfiLabel(position) || position;
+}
 
-  return position;
+export function positionToRfiLabel(position) {
+  return RFI_LABEL_BY_POSITION[position] || null;
 }
 
 export function rangeBucketForPlayers(players) {

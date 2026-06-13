@@ -1,6 +1,6 @@
 import { RANKS, SUITS } from "./deck.js";
 
-const REQUIRED_META_FIELDS = ["source", "url", "tableSize", "transcribedBy", "date"];
+export const RFI_POSITIONS_9MAX = ["UTG", "UTG+1", "UTG+2", "LJ", "HJ", "CO", "BTN"];
 
 export function validateRangeChart(chart) {
   if (!chart || typeof chart !== "object") {
@@ -11,11 +11,9 @@ export function validateRangeChart(chart) {
     throw new Error("Range chart is missing meta.");
   }
 
-  REQUIRED_META_FIELDS.forEach((field) => {
-    if (chart.meta[field] === undefined || chart.meta[field] === "") {
-      throw new Error(`Range chart meta.${field} is required.`);
-    }
-  });
+  if (chart.meta.source === undefined || chart.meta.source === "") {
+    throw new Error("Range chart meta.source is required.");
+  }
 
   if (!Number.isInteger(chart.meta.tableSize) || chart.meta.tableSize < 2 || chart.meta.tableSize > 9) {
     throw new Error("Range chart meta.tableSize must be an integer from 2 to 9.");
@@ -40,6 +38,51 @@ export function validateRangeChart(chart) {
       }
     });
   });
+
+  return chart;
+}
+
+export function validateRfiChart(chart, { positions = RFI_POSITIONS_9MAX } = {}) {
+  validateRangeChart(chart);
+
+  if (!chart.meta.comboCounts || typeof chart.meta.comboCounts !== "object") {
+    throw new Error("RFI chart meta.comboCounts is required.");
+  }
+
+  const expected = new Set(positions);
+  const actual = Object.keys(chart.positions);
+  const unexpected = actual.filter((position) => !expected.has(position));
+
+  if (unexpected.length) {
+    throw new Error(`RFI chart has unexpected position: ${unexpected[0]}`);
+  }
+
+  positions.forEach((position) => {
+    if (!chart.positions[position]) {
+      throw new Error(`RFI chart is missing position: ${position}`);
+    }
+
+    const expectedCombos = chart.meta.comboCounts[position];
+
+    if (!Number.isInteger(expectedCombos) || expectedCombos < 0) {
+      throw new Error(`RFI chart meta.comboCounts.${position} must be a non-negative integer.`);
+    }
+
+    const expandedCombos = expandPositionRange(chart.positions[position]).length;
+
+    if (expandedCombos !== expectedCombos) {
+      throw new Error(`RFI chart combo count mismatch for ${position}: expected ${expectedCombos}, got ${expandedCombos}.`);
+    }
+  });
+
+  for (let index = 1; index < positions.length; index += 1) {
+    const previous = chart.meta.comboCounts[positions[index - 1]];
+    const current = chart.meta.comboCounts[positions[index]];
+
+    if (previous > current) {
+      throw new Error(`RFI chart combo counts must widen monotonically: ${positions[index - 1]} > ${positions[index]}.`);
+    }
+  }
 
   return chart;
 }

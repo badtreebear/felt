@@ -12,6 +12,8 @@ describe("range grid", () => {
   it("marks a premium hero hand in range for UTG", () => {
     const range = getOpeningRange({ players: 9, position: "UTG" });
 
+    expect(range.source).toContain("PokerCoaching.com");
+    expect(range.isPlaceholder).toBe(false);
     expect(heroRangeVerdict(["Ah", "Ad"], range.grid).status).toBe("in range");
     expect(heroRangeVerdict(["7c", "2d"], range.grid).status).toBe("not in range");
   });
@@ -24,5 +26,16 @@ describe("range grid", () => {
     expect(sixMax.grid.every((row) => row.length === 13)).toBe(true);
     expect(nineMax.grid).toHaveLength(13);
     expect(nineMax.grid.every((row) => row.length === 13)).toBe(true);
+  });
+
+  it("returns a neutral no-chart range for blinds", () => {
+    const smallBlind = getOpeningRange({ players: 9, position: "SB" });
+    const bigBlind = getOpeningRange({ players: 9, position: "BB" });
+
+    expect(smallBlind.chartAvailable).toBe(false);
+    expect(smallBlind.grid).toBeNull();
+    expect(smallBlind.message).toContain("No RFI chart");
+    expect(bigBlind.chartAvailable).toBe(false);
+    expect(bigBlind.message).toContain("No RFI chart");
   });
 });

@@ -1,6 +1,8 @@
 import { createIcons, RotateCcw, Shuffle, StepForward } from "lucide";
 import { boardForStreet, dealHoldemHand, nextStreet, STREET_LABELS } from "./engine/deck.js";
+import { getOpeningRangeLoadError } from "./data/ranges/opening-ranges.js";
 import { evCall } from "./engine/ev.js";
+import { applyHeroPreflopAction, startPreflopAction, suggestedHeroRaiseTo } from "./engine/preflop-action.js";
 import { requiredEquity } from "./engine/potodds.js";
 import { state, subscribe, updateState } from "./state.js";
 import { renderControls } from "./ui/controls.js";
@@ -20,14 +22,16 @@ app.innerHTML = `
         <p>Felt</p>
         <h1>Texas Hold'em trainer</h1>
       </div>
-      <span class="phase-badge">Phase 3: positions + ranges</span>
+      <span class="phase-badge">Phase 4: scripted preflop</span>
     </header>
     <div id="controls-root"></div>
+    <div id="range-alert-root"></div>
     <div id="table-root"></div>
   </div>
 `;
 
 const controlsRoot = document.querySelector("#controls-root");
+const rangeAlertRoot = document.querySelector("#range-alert-root");
 const tableRoot = document.querySelector("#table-root");
 let equityWorker = null;
 let equityRequestId = 0;
@@ -48,10 +52,16 @@ const actions = {
 
     updateState((draft) => {
       draft.config.heroSeat = heroSeat;
+      ensureSeatProfiles(draft.config);
       draft.hand = hand;
       draft.ui.revealVillains = false;
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
+      applyPreflopToDraft(draft, startPreflopAction({
+        hand,
+        config: draft.config,
+        seatProfiles: draft.config.seatProfiles,
+      }));
 
       if (manualSpot) {
         draft.hand.pot = manualSpot.pot;
@@ -72,10 +82,15 @@ const actions = {
     updateState((draft) => {
       draft.config.players = players;
       draft.config.heroSeat = Math.floor(players / 2);
+      ensureSeatProfiles(draft.config);
     });
     actions.dealNewHand();
   },
   setStreet(street) {
+    if (state.hand.preflop) {
+      return;
+    }
+
     updateState((draft) => {
       draft.hand.street = street;
       draft.hand.board = boardForStreet(draft.hand.boardRunout, street);
@@ -146,10 +161,51 @@ const actions = {
       draft.ui.openPopover = null;
     });
   },
+  setSeatProfile(seat, profileId) {
+    const seed = state.hand.seed;
+
+    updateState((draft) => {
+      draft.config.seatProfiles[String(seat)] = profileId;
+      draft.ui.openPopover = null;
+      draft.ui.openRangeSeat = null;
+    });
+
+    if (seed) {
+      actions.dealNewHand(seed);
+    }
+  },
+  setShowProfiles(showProfiles) {
+    updateState((draft) => {
+      draft.ui.showProfiles = showProfiles;
+    });
+  },
+  setDisplayUnit(displayUnit) {
+    updateState((draft) => {
+      draft.ui.displayUnit = displayUnit;
+    });
+  },
+  setHeroRaiseTo(heroRaiseTo) {
+    updateState((draft) => {
+      draft.ui.heroRaiseTo = cleanAmount(heroRaiseTo);
+    });
+  },
+  heroPreflopAction(action, raiseTo) {
+    updateState((draft) => {
+      const preflop = applyHeroPreflopAction(draft.hand.preflop, {
+        action,
+        raiseTo: cleanAmount(raiseTo ?? draft.ui.heroRaiseTo),
+      });
+      applyPreflopToDraft(draft, preflop);
+      draft.ui.openPopover = null;
+      draft.ui.openRangeSeat = null;
+    });
+    queueEquitySimulation();
+  },
 };
 
 subscribe("*", () => {
   renderControls(controlsRoot, state, actions);
+  renderRangeAlert(rangeAlertRoot);
   renderTable(tableRoot, state, actions);
   createIcons({
     icons: {
@@ -169,10 +225,41 @@ document.addEventListener("keydown", (event) => {
 
 actions.dealNewHand();
 
+function renderRangeAlert(container) {
+  const error = getOpeningRangeLoadError();
+  container.replaceChildren();
+
+  if (!error) {
+    return;
+  }
+
+  const alert = document.createElement("div");
+  alert.className = "app-alert";
+  alert.setAttribute("role", "alert");
+  alert.textContent = `RFI chart failed to load: ${error.message}`;
+  container.append(alert);
+}
+
 function queueEquitySimulation() {
   const heroCards = state.hand.holeCards[state.config.heroSeat] || [];
+  const villains = villainInputsForCurrentState();
 
   if (heroCards.length !== 2) {
+    return;
+  }
+
+  if (villains.length === 0) {
+    updateState((draft) => {
+      applyEquityResult(draft, {
+        heroEquity: 1,
+        equityCI: 0,
+        tieRate: 0,
+        iterations: 1,
+        opponentCount: 0,
+        exact: true,
+      });
+      draft.maths.simStatus = "done";
+    });
     return;
   }
 
@@ -189,7 +276,7 @@ function queueEquitySimulation() {
   const input = {
     heroCards,
     board: state.hand.board,
-    villains: villainInputsForCurrentState(),
+    villains,
     iterations: state.hand.board.length === 0 ? 20000 : 10000,
     progressEvery: 5000,
     timeLimitMs: 300,
@@ -201,7 +288,8 @@ function queueEquitySimulation() {
 
 function villainInputsForCurrentState() {
   const villainSeats = Array.from({ length: state.config.players }, (_, seat) => seat)
-    .filter((seat) => seat !== state.config.heroSeat);
+    .filter((seat) => seat !== state.config.heroSeat)
+    .filter((seat) => !state.hand.preflop?.folded?.[seat]);
 
   if (state.ui.revealVillains) {
     return villainSeats.map((seat) => ({
@@ -275,6 +363,29 @@ function refreshMaths(draft, { keepEquity }) {
       pot: draft.hand.pot,
       toCall: draft.hand.toCall,
     });
+}
+
+function applyPreflopToDraft(draft, preflop) {
+  draft.hand.preflop = preflop;
+  draft.hand.pot = preflop.pot;
+  draft.hand.toCall = preflop.heroToCall || 0;
+  draft.hand.actionLog = preflop.actionLog;
+
+  if (preflop.status === "waitingHero") {
+    draft.ui.heroRaiseTo = suggestedHeroRaiseTo(preflop);
+  }
+}
+
+function ensureSeatProfiles(config) {
+  config.seatProfiles = config.seatProfiles || {};
+
+  for (let seat = 0; seat < config.players; seat += 1) {
+    if (seat === config.heroSeat) {
+      continue;
+    }
+
+    config.seatProfiles[String(seat)] = config.seatProfiles[String(seat)] || "standard";
+  }
 }
 
 function cleanAmount(value) {

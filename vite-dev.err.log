@@ -1,0 +1,38 @@
+[2m4:07:05 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: preflopResultText is not defined
+[39m > createBoard src/ui/table.js?t=1781323623167:67:5
+ > renderTable src/ui/table.js?t=1781323623167:31:16
+ > src/main.js?t=1781323623167:209:3
+ > src/state.js?t=1781323342946:74:5
+ > notifySubscribers src/state.js?t=1781323342946:73:15
+ > updateState src/state.js?t=1781323342946:61:3
+ > Object.dealNewHand src/main.js?t=1781323623167:53:5
+ > src/main.js?t=1781323623167:226:9
+
+[2m4:07:23 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: createProfileBadge is not defined
+[39m > createSeats src/ui/table.js?t=1781323637334:148:26
+ > renderTable src/ui/table.js?t=1781323637334:32:16
+ > src/main.js?t=1781323637334:209:3
+ > subscribe src/state.js?t=1781323342946:54:3
+ > src/main.js?t=1781323637334:206:1
+
+[2m4:07:25 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: createProfileBadge is not defined
+[39m > createSeats src/ui/table.js?t=1781323637334:148:26
+ > renderTable src/ui/table.js?t=1781323637334:32:16
+ > src/main.js?t=1781323637334:209:3
+ > subscribe src/state.js?t=1781323342946:54:3
+ > src/main.js?t=1781323637334:206:1
+
+[2m4:07:39 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: createHeroActionControls is not defined
+[39m > createHandPanel src/ui/table.js?t=1781323658067:345:24
+ > renderTable src/ui/table.js?t=1781323658067:33:23
+ > src/main.js?t=1781323658067:209:3
+ > subscribe src/state.js?t=1781323342946:54:3
+ > src/main.js?t=1781323658067:206:1
+
+[2m4:07:39 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: createHeroActionControls is not defined
+[39m > createHandPanel src/ui/table.js?t=1781323658067:345:24
+ > renderTable src/ui/table.js?t=1781323658067:33:23
+ > src/main.js?t=1781323658067:209:3
+ > subscribe src/state.js?t=1781323342946:54:3
+ > src/main.js?t=1781323658067:206:1
+

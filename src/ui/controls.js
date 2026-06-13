@@ -1,4 +1,6 @@
 import { STREET_LABELS } from "../engine/deck.js";
+import { getProfileOptions } from "../engine/player-model.js";
+import { getSeatPositions } from "../engine/positions.js";
 import { STREET_ORDER } from "../state.js";
 
 export function renderControls(container, state, actions) {
@@ -33,6 +35,7 @@ export function renderControls(container, state, actions) {
         label: STREET_LABELS[street],
       })),
       onChange: actions.setStreet,
+      disabled: Boolean(state.hand.preflop),
     }),
   );
 
@@ -46,7 +49,7 @@ export function renderControls(container, state, actions) {
     label: "Next street",
     icon: "step-forward",
     onClick: actions.advanceStreet,
-    disabled: state.hand.street === "showdown",
+    disabled: Boolean(state.hand.preflop) || state.hand.street === "showdown",
   });
 
   const replayButton = createButton({
@@ -73,12 +76,77 @@ export function renderControls(container, state, actions) {
 
   revealLabel.append(revealInput, revealText);
   controls.append(revealLabel);
+  controls.append(createPhaseFourSettings(state, actions));
 
   if (state.ui.spotMode === "manual") {
     controls.append(createManualSpotControls(state, actions));
   }
 
   container.append(controls);
+}
+
+function createPhaseFourSettings(state, actions) {
+  const settings = document.createElement("section");
+  settings.className = "phase-settings";
+  settings.setAttribute("aria-label", "Preflop player settings");
+
+  const displayToggle = document.createElement("div");
+  displayToggle.className = "segmented segmented--compact";
+  displayToggle.setAttribute("role", "group");
+  displayToggle.setAttribute("aria-label", "Stakes display");
+  displayToggle.append(
+    createModeButton({
+      label: "$",
+      pressed: state.ui.displayUnit !== "bb",
+      onClick: () => actions.setDisplayUnit("usd"),
+    }),
+    createModeButton({
+      label: "BB",
+      pressed: state.ui.displayUnit === "bb",
+      onClick: () => actions.setDisplayUnit("bb"),
+    }),
+  );
+
+  const profileVisibility = document.createElement("label");
+  profileVisibility.className = "toggle toggle--inline";
+
+  const profileInput = document.createElement("input");
+  profileInput.type = "checkbox";
+  profileInput.checked = state.ui.showProfiles;
+  profileInput.addEventListener("change", (event) => {
+    actions.setShowProfiles(event.currentTarget.checked);
+  });
+
+  const profileText = document.createElement("span");
+  profileText.textContent = "Show villain profiles";
+  profileVisibility.append(profileInput, profileText);
+
+  const profileGrid = document.createElement("div");
+  profileGrid.className = "profile-grid";
+  const positions = state.hand.buttonSeat !== undefined
+    ? getSeatPositions({ players: state.config.players, buttonSeat: state.hand.buttonSeat })
+    : {};
+  const profileOptions = getProfileOptions().map((profile) => ({
+    value: profile.id,
+    label: profile.label,
+  }));
+
+  for (let seat = 0; seat < state.config.players; seat += 1) {
+    if (seat === state.config.heroSeat) {
+      continue;
+    }
+
+    profileGrid.append(createSelectControl({
+      id: `profile-seat-${seat}`,
+      label: `Seat ${seat + 1} ${positions[seat] || ""}`.trim(),
+      value: state.config.seatProfiles[String(seat)] || "standard",
+      options: profileOptions,
+      onChange: (value) => actions.setSeatProfile(seat, value),
+    }));
+  }
+
+  settings.append(displayToggle, profileVisibility, profileGrid);
+  return settings;
 }
 
 function createModeControl(state, actions) {
@@ -140,7 +208,7 @@ function createManualSpotControls(state, actions) {
   return group;
 }
 
-function createSelectControl({ id, label, value, options, onChange }) {
+function createSelectControl({ id, label, value, options, onChange, disabled = false }) {
   const wrapper = document.createElement("label");
   wrapper.className = "field";
   wrapper.htmlFor = id;
@@ -150,6 +218,7 @@ function createSelectControl({ id, label, value, options, onChange }) {
 
   const select = document.createElement("select");
   select.id = id;
+  select.disabled = disabled;
   select.addEventListener("change", (event) => onChange(event.currentTarget.value));
 
   options.forEach((option) => {

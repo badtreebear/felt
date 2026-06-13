@@ -1,5 +1,6 @@
 import { callVerdict } from "../engine/ev.js";
 import { finalPotAfterCall } from "../engine/potodds.js";
+import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
 
 const CHIP_CONFIG = [
@@ -9,7 +10,7 @@ const CHIP_CONFIG = [
 ];
 
 export function createMathsChips(state, actions) {
-  if (state.hand.toCall <= 0) {
+  if (!shouldShowMathsPanel(state)) {
     return null;
   }
 
@@ -41,6 +42,10 @@ export function createMathsChips(state, actions) {
   return tray;
 }
 
+export function shouldShowMathsPanel(state) {
+  return state?.ui?.spotMode === "manual" && Number(state?.hand?.toCall) > 0;
+}
+
 function chipValue(id, state) {
   if (id === "equity") {
     if (state.maths.simStatus === "running" && state.maths.heroEquity === null) {
@@ -55,7 +60,7 @@ function chipValue(id, state) {
   }
 
   if (id === "ev") {
-    return formatBb(state.maths.evCall, { signed: true });
+    return formatAmount(state.maths.evCall, state, { signed: true });
   }
 
   return "";
@@ -107,11 +112,11 @@ function potOddsBody(state) {
 
   body.append(
     paragraph(`Required equity = call / (pot + bet + call).`),
-    paragraph(`${formatBb(call)} / (${formatBb(pot)} + ${formatBb(call)} + ${formatBb(call)}) = ${formatPercent(state.maths.requiredEquity)}.`),
+    paragraph(`${formatAmount(call, state)} / (${formatAmount(pot, state)} + ${formatAmount(call, state)} + ${formatAmount(call, state)}) = ${formatPercent(state.maths.requiredEquity)}.`),
   );
 
   if (finalPot > 0) {
-    body.append(paragraph(`A call contests a final pot of ${formatBb(finalPot)}.`));
+    body.append(paragraph(`A call contests a final pot of ${formatAmount(finalPot, state)}.`));
   }
 
   return body;
@@ -126,7 +131,7 @@ function evBody(state) {
 
   body.append(
     paragraph(`EV(call) = equity * final pot - call.`),
-    paragraph(`${formatPercent(equity)} * ${formatBb(finalPotAfterCall(pot, call))} - ${formatBb(call)} = ${formatBb(state.maths.evCall, { signed: true })}.`),
+    paragraph(`${formatPercent(equity)} * ${formatAmount(finalPotAfterCall(pot, call), state)} - ${formatAmount(call, state)} = ${formatAmount(state.maths.evCall, state, { signed: true })}.`),
     paragraph(`Current engine verdict: ${verdict}.`),
   );
 
@@ -147,15 +152,4 @@ function formatPercent(value, { blank = "--" } = {}) {
   }
 
   return `${Math.round(number * 100)}%`;
-}
-
-function formatBb(value, { signed = false } = {}) {
-  const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return "--";
-  }
-
-  const sign = signed && number > 0 ? "+" : "";
-  return `${sign}${number.toFixed(1).replace(/\.0$/, "")} BB`;
 }
