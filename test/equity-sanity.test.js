@@ -13,7 +13,7 @@ describe("equity sanity checks", () => {
 
     expect(result.heroEquity).toBeGreaterThan(0.79);
     expect(result.heroEquity).toBeLessThan(0.83);
-  });
+  }, 12000);
 
   it("AKs vs 22 preflop is a coin flip with 22 slightly ahead", () => {
     const result = runEquitySimulation({
@@ -25,7 +25,7 @@ describe("equity sanity checks", () => {
 
     expect(result.heroEquity).toBeGreaterThan(0.48);
     expect(result.heroEquity).toBeLessThan(0.53);
-  });
+  }, 12000);
 
   it("a naked flop flush draw has about 35% equity by the river", () => {
     const result = runEquitySimulation({

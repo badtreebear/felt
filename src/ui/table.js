@@ -2,10 +2,11 @@ import { STREET_LABELS } from "../engine/deck.js";
 import { PLAYER_PROFILES } from "../engine/player-model.js";
 import { resolveShowdown } from "../engine/hand-eval.js";
 import { legalHeroActions } from "../engine/preflop-action.js";
+import { legalPostflopActions } from "../engine/postflop-action.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { getOpeningRange } from "../data/ranges/opening-ranges.js";
 import { createCard, createCardRow } from "./cards.js";
-import { createMathsChips } from "./chips.js";
+import { createMathsChips, shouldShowMathsPanel } from "./chips.js";
 import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
 import { createRangeGrid, heroRangeVerdict } from "./range-grid.js";
@@ -25,7 +26,7 @@ export function renderTable(container, state, actions) {
   table.setAttribute("aria-label", "Poker table");
 
   const showdown = state.hand.street === "showdown"
-    ? resolveShowdown({ holeCards: state.hand.holeCards, board: state.hand.board })
+    ? resolveShowdown({ holeCards: showdownHoleCards(state), board: state.hand.board })
     : null;
 
   table.append(createBoard(state, showdown));
@@ -37,13 +38,15 @@ export function renderTable(container, state, actions) {
 function createBoard(state, showdown) {
   const board = document.createElement("div");
   board.className = "board";
+  const handTerminal = isTerminalHand(state);
+  const potLabel = handTerminal ? "Final pot" : state.hand.toCall > 0 ? "Pot before bet" : "Pot";
 
   const pot = document.createElement("div");
   pot.className = "pot";
   pot.innerHTML = `
-    <span>${state.hand.toCall > 0 ? "Pot before bet" : "Pot"}</span>
+    <span>${potLabel}</span>
     <strong>${formatAmount(state.hand.pot, state)}</strong>
-    ${state.hand.toCall > 0 ? `<em>Call ${formatAmount(state.hand.toCall, state)}</em>` : ""}
+    ${!handTerminal && state.hand.toCall > 0 ? `<em>Call ${formatAmount(state.hand.toCall, state)}</em>` : ""}
   `;
 
   const street = document.createElement("div");
@@ -62,7 +65,10 @@ function createBoard(state, showdown) {
 
   if (showdown) {
     const winnerNames = showdown.winnerSeats.map((seat) => seatLabel(seat, state.config.heroSeat));
-    result.textContent = `${winnerNames.join(" + ")} win with ${showdown.winningDescription}`;
+    const winnerVerb = winnerNames.length === 1 ? "wins" : "win";
+    result.textContent = `${winnerNames.join(" + ")} ${winnerVerb} with ${showdown.winningDescription}`;
+  } else if (state.hand.postflop) {
+    result.textContent = postflopResultText(state);
   } else if (state.hand.preflop?.status === "complete") {
     result.textContent = preflopResultText(state);
   } else if (state.hand.preflop?.status === "waitingHero") {
@@ -82,15 +88,16 @@ function createSeats(state, showdown, actions) {
   const players = state.config.players;
   const heroSeat = state.config.heroSeat;
   const positions = getSeatPositions({ players, buttonSeat: state.hand.buttonSeat });
-  const preflop = state.hand.preflop;
+  const phase = currentPhaseState(state);
+  const handTerminal = isTerminalHand(state);
   seats.dataset.players = String(players);
 
   for (let seat = 0; seat < players; seat += 1) {
     const seatElement = document.createElement("article");
     const isHero = seat === heroSeat;
-    const isWinner = showdown?.winnerSeats.includes(seat) || preflop?.winnerSeat === seat;
-    const isFolded = Boolean(preflop?.folded?.[seat]);
-    const isActing = preflop?.status === "waitingHero" && preflop.currentSeat === seat;
+    const isWinner = showdown?.winnerSeats.includes(seat) || phaseWinners(phase).includes(seat);
+    const isFolded = Boolean(phase?.folded?.[seat]);
+    const isActing = phase?.status === "waitingHero" && phase.currentSeat === seat;
     const position = positions[seat];
     const showCards = isHero || state.ui.revealVillains || state.hand.street === "showdown";
     const visualIndex = (seat - heroSeat + players) % players;
@@ -113,11 +120,20 @@ function createSeats(state, showdown, actions) {
     name.textContent = seatLabel(seat, heroSeat);
 
     const stack = document.createElement("span");
-    stack.textContent = formatAmount(preflop?.stacks?.[seat] ?? state.config.stack, state);
+    stack.textContent = formatAmount(phase?.stacks?.[seat] ?? state.config.stack, state);
 
     title.append(name, stack);
 
     const cards = createCardRow(state.hand.holeCards[seat] || [], { hidden: !showCards });
+
+    if (isFolded) {
+      const foldStamp = document.createElement("span");
+      foldStamp.className = "fold-stamp";
+      foldStamp.textContent = "Fold";
+      foldStamp.setAttribute("aria-hidden", "true");
+      cards.append(foldStamp);
+    }
+
     const badges = document.createElement("div");
     badges.className = "seat__badges";
 
@@ -136,9 +152,15 @@ function createSeats(state, showdown, actions) {
       badges.append(winner);
     }
 
-    const committed = preflop?.contributions?.[seat] || 0;
+    const actionBadge = createLastActionBadge({ state, seat });
 
-    if (committed > 0) {
+    if (actionBadge) {
+      badges.append(actionBadge);
+    }
+
+    const committed = phase?.contributions?.[seat] || 0;
+
+    if (committed > 0 && !handTerminal) {
       const commit = document.createElement("span");
       commit.className = "commit-badge";
       commit.textContent = `In ${formatAmount(committed, state)}`;
@@ -170,7 +192,7 @@ function createSeats(state, showdown, actions) {
 }
 
 function createProfileBadge({ seat, isHero, state }) {
-  const showProfile = !isHero && (state.ui.showProfiles || state.hand.preflop?.status === "complete");
+  const showProfile = !isHero && (state.ui.showProfiles || isTerminalHand(state));
 
   if (!showProfile) {
     return null;
@@ -183,6 +205,107 @@ function createProfileBadge({ seat, isHero, state }) {
   badge.textContent = profile.label || profileId;
   badge.title = `Range ${profile.rangeWidth} / aggression ${profile.aggression} / sizing ${profile.sizing}`;
   return badge;
+}
+
+function createLastActionBadge({ state, seat }) {
+  const action = latestSeatAction(state.hand.actionLog, seat, state);
+
+  if (!action) {
+    return null;
+  }
+
+  const badge = document.createElement("span");
+  badge.className = "action-badge";
+  badge.classList.toggle("action-badge--fold", action.kind === "fold");
+  badge.classList.toggle("action-badge--aggressive", action.kind === "aggressive");
+  badge.classList.toggle("action-badge--win", action.kind === "win");
+  badge.textContent = action.label;
+  return badge;
+}
+
+function latestSeatAction(actionLog, seat, state) {
+  for (let index = actionLog.length - 1; index >= 0; index -= 1) {
+    const entry = actionLog[index];
+
+    if (entry.seat !== seat || isHiddenSeatAction(entry.action)) {
+      continue;
+    }
+
+    return formatSeatAction(entry, state);
+  }
+
+  return null;
+}
+
+function isHiddenSeatAction(action) {
+  return [
+    "dealer button",
+    "small blind",
+    "big blind",
+    "hero dealt in",
+    "all live hands revealed",
+  ].includes(action)
+    || action.includes("dealt")
+    || action.includes("complete");
+}
+
+function formatSeatAction(entry, state) {
+  const phase = currentPhaseState(state);
+  const isAllIn = Boolean(phase?.allIn?.[entry.seat]);
+
+  if (entry.action === "folds") {
+    return { label: "Fold", kind: "fold" };
+  }
+
+  if (entry.action === "checks") {
+    return { label: "Check", kind: "neutral" };
+  }
+
+  if (entry.action === "calls") {
+    if (isAllIn) {
+      return { label: `All in ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+    }
+
+    return { label: `Call ${formatAmount(entry.size, state)}`, kind: "neutral" };
+  }
+
+  if (entry.action === "bets") {
+    if (isAllIn) {
+      return { label: `All in ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+    }
+
+    return { label: `Bet ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+  }
+
+  if (entry.action === "raises to") {
+    if (isAllIn) {
+      return { label: `All in ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+    }
+
+    return { label: `Raise ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+  }
+
+  if (entry.action === "3-bets to") {
+    if (isAllIn) {
+      return { label: `All in ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+    }
+
+    return { label: `3-bet ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+  }
+
+  if (entry.action === "4-bets to") {
+    if (isAllIn) {
+      return { label: `All in ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+    }
+
+    return { label: `4-bet ${formatAmount(entry.size, state)}`, kind: "aggressive" };
+  }
+
+  if (entry.action === "wins pot" || entry.action.startsWith("wins showdown")) {
+    return { label: `Wins ${formatAmount(entry.size, state)}`, kind: "win" };
+  }
+
+  return null;
 }
 
 function createPositionBadge({ seat, position, state, actions }) {
@@ -315,13 +438,17 @@ function createHandPanel(state, showdown, actions) {
     meta.append(createMeta("Preflop", preflopStatusText(state)));
   }
 
+  if (state.hand.postflop) {
+    meta.append(createMeta("Postflop", postflopStatusText(state)));
+  }
+
   const heroRfi = heroRfiText(state);
 
   if (heroRfi) {
     meta.append(createMeta("RFI", heroRfi));
   }
 
-  if (state.hand.toCall > 0) {
+  if (shouldShowMathsPanel(state)) {
     meta.append(createMeta("To call", formatAmount(state.hand.toCall, state)));
     meta.append(createMeta("Equity", `${formatPercent(state.maths.heroEquity)} ${state.maths.simStatus === "running" ? "running" : ""}`.trim()));
     meta.append(createMeta("Pot odds", formatPercent(state.maths.requiredEquity)));
@@ -343,6 +470,7 @@ function createHandPanel(state, showdown, actions) {
   });
 
   const heroControls = createHeroActionControls(state, actions);
+  const completionCue = createCompletionCue(state, actions);
 
   panel.append(heading, meta);
 
@@ -350,11 +478,23 @@ function createHandPanel(state, showdown, actions) {
     panel.append(heroControls);
   }
 
+  if (completionCue) {
+    panel.append(completionCue);
+  }
+
   panel.append(log);
   return panel;
 }
 
 function createHeroActionControls(state, actions) {
+  if (state.hand.postflop?.status === "waitingHero") {
+    return createPostflopHeroActionControls(state, actions);
+  }
+
+  return createPreflopHeroActionControls(state, actions);
+}
+
+function createPreflopHeroActionControls(state, actions) {
   const legal = legalHeroActions(state.hand.preflop);
 
   if (!actions || !legal.canAct) {
@@ -421,6 +561,103 @@ function createHeroActionControls(state, actions) {
   return wrapper;
 }
 
+function createPostflopHeroActionControls(state, actions) {
+  const legal = legalPostflopActions(state.hand.postflop);
+
+  if (!actions || !legal.canAct) {
+    return null;
+  }
+
+  const betAmount = clampAmount(
+    state.ui.heroRaiseTo || state.hand.postflop.suggestedHeroBet || legal.minBet,
+    legal.minBet,
+    legal.maxBet,
+  );
+  const wrapper = document.createElement("section");
+  wrapper.className = "hero-actions";
+  wrapper.setAttribute("aria-label", "Hero postflop action");
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Hero action";
+
+  const buttonRow = document.createElement("div");
+  buttonRow.className = "hero-actions__row";
+
+  if (legal.callAmount > 0) {
+    buttonRow.append(
+      createHeroActionButton("Fold", () => actions.heroPostflopAction("fold")),
+      createHeroActionButton(`Call ${formatAmount(legal.callAmount, state)}`, () => actions.heroPostflopAction("call")),
+    );
+    wrapper.append(heading, buttonRow);
+    return wrapper;
+  }
+
+  buttonRow.append(createHeroActionButton("Check", () => actions.heroPostflopAction("check")));
+
+  const betRow = document.createElement("div");
+  betRow.className = "hero-actions__raise";
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = String(legal.minBet);
+  input.max = String(legal.maxBet);
+  input.step = "0.5";
+  input.value = String(betAmount);
+  input.setAttribute("aria-label", "Bet amount");
+  input.addEventListener("input", (event) => {
+    actions.setHeroRaiseTo(Number(event.currentTarget.value));
+  });
+
+  betRow.append(
+    input,
+    createHeroActionButton(`Bet ${formatAmount(betAmount, state)}`, () => actions.heroPostflopAction("bet", betAmount)),
+  );
+
+  const presetRow = document.createElement("div");
+  presetRow.className = "hero-actions__presets";
+
+  uniqueNumbers([state.hand.pot * 0.5, state.hand.pot, betAmount]).forEach((amount) => {
+    const target = clampAmount(amount, legal.minBet, legal.maxBet);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = amount === state.hand.pot ? "Pot" : formatAmount(target, state);
+    button.addEventListener("click", () => actions.setHeroRaiseTo(target));
+    presetRow.append(button);
+  });
+
+  wrapper.append(heading, buttonRow, betRow, presetRow);
+  return wrapper;
+}
+
+function createCompletionCue(state, actions) {
+  const cue = completionCueForState(state);
+
+  if (!actions || !cue) {
+    return null;
+  }
+
+  const wrapper = document.createElement("section");
+  wrapper.className = "completion-cue";
+  wrapper.setAttribute("aria-label", cue.ariaLabel);
+
+  const heading = document.createElement("h3");
+  heading.textContent = cue.heading;
+
+  const text = document.createElement("p");
+  text.textContent = cue.text;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "completion-cue__button";
+  button.textContent = cue.buttonLabel;
+  button.addEventListener("click", cue.action === "continue"
+    ? () => actions.continueScriptedHand()
+    : () => actions.dealNewHand());
+
+  wrapper.append(heading, text, button);
+  return wrapper;
+}
+
 function createHeroActionButton(label, onClick) {
   const button = document.createElement("button");
   button.type = "button";
@@ -428,6 +665,42 @@ function createHeroActionButton(label, onClick) {
   button.textContent = label;
   button.addEventListener("click", onClick);
   return button;
+}
+
+function completionCueForState(state) {
+  if (state.hand.postflop?.status === "streetComplete") {
+    const nextStreet = state.hand.postflop.street === "flop" ? "turn" : "river";
+
+    return {
+      ariaLabel: "Street complete",
+      heading: `${capitalize(state.hand.postflop.street)} complete`,
+      text: `Continue to the ${nextStreet}.`,
+      buttonLabel: `Continue to ${nextStreet}`,
+      action: "continue",
+    };
+  }
+
+  if (!state.hand.postflop && state.hand.preflop?.status === "complete" && state.hand.preflop.result === "wouldSeeFlop") {
+    return {
+      ariaLabel: "Preflop complete",
+      heading: "Preflop complete",
+      text: "Continue to the flop.",
+      buttonLabel: "Continue to flop",
+      action: "continue",
+    };
+  }
+
+  if (isTerminalHand(state)) {
+    return {
+      ariaLabel: "Hand complete",
+      heading: "Hand complete",
+      text: "Deal next hand to continue.",
+      buttonLabel: "Deal next hand",
+      action: "deal",
+    };
+  }
+
+  return null;
 }
 
 function preflopResultText(state) {
@@ -441,7 +714,33 @@ function preflopResultText(state) {
     return `${seatLabel(preflop.winnerSeat, state.config.heroSeat)} wins preflop.`;
   }
 
-  return "Preflop complete - would see flop.";
+  return "Preflop complete - continue to flop.";
+}
+
+function postflopResultText(state) {
+  const postflop = state.hand.postflop;
+
+  if (!postflop) {
+    return "";
+  }
+
+  if (postflop.status === "waitingHero") {
+    return `Hero to act on the ${postflop.street}.`;
+  }
+
+  if (postflop.status === "streetComplete") {
+    return `${capitalize(postflop.street)} complete.`;
+  }
+
+  if (postflop.result === "winner") {
+    return `${seatLabel(postflop.winnerSeat, state.config.heroSeat)} wins ${postflop.street}.`;
+  }
+
+  if (postflop.result === "showdown") {
+    return "Hand complete at showdown.";
+  }
+
+  return `${capitalize(postflop.street)} action running.`;
 }
 
 function preflopStatusText(state) {
@@ -460,6 +759,28 @@ function preflopStatusText(state) {
   }
 
   return "Running";
+}
+
+function postflopStatusText(state) {
+  const postflop = state.hand.postflop;
+
+  if (!postflop) {
+    return null;
+  }
+
+  if (postflop.status === "waitingHero") {
+    return `Hero to act on ${postflop.street}`;
+  }
+
+  if (postflop.status === "streetComplete") {
+    return `${capitalize(postflop.street)} complete`;
+  }
+
+  if (postflop.status === "complete") {
+    return postflopResultText(state);
+  }
+
+  return `${capitalize(postflop.street)} running`;
 }
 
 function heroRfiText(state) {
@@ -494,6 +815,45 @@ function heroRfiText(state) {
   }
 
   return "raise";
+}
+
+function currentPhaseState(state) {
+  return state.hand.postflop || state.hand.preflop;
+}
+
+function phaseWinners(phase) {
+  if (!phase) {
+    return [];
+  }
+
+  if (Array.isArray(phase.winnerSeats) && phase.winnerSeats.length) {
+    return phase.winnerSeats;
+  }
+
+  return phase.winnerSeat === null || phase.winnerSeat === undefined ? [] : [phase.winnerSeat];
+}
+
+function showdownHoleCards(state) {
+  const phase = currentPhaseState(state);
+
+  if (!phase) {
+    return state.hand.holeCards;
+  }
+
+  return Object.fromEntries(
+    Object.entries(state.hand.holeCards)
+      .filter(([seat]) => !phase.folded?.[seat]),
+  );
+}
+
+function isTerminalHand(state) {
+  return state.hand.postflop?.status === "complete"
+    || (state.hand.preflop?.status === "complete" && state.hand.preflop.result === "winner")
+    || state.hand.street === "showdown";
+}
+
+function capitalize(value) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : "";
 }
 
 function createMeta(label, value) {

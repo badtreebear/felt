@@ -7,6 +7,7 @@ export const state = {
     blinds: { sb: 0.5, bb: 1 },
     bbDollarValue: 2,
     stack: 200,
+    tableStacks: {},
     seatProfiles: {},
   },
   hand: {
@@ -21,7 +22,9 @@ export const state = {
     toCall: 0,
     actionLog: [],
     buttonSeat: 0,
+    startingStacks: {},
     preflop: null,
+    postflop: null,
   },
   maths: {
     heroEquity: null,
@@ -42,7 +45,7 @@ export const state = {
     displayUnit: "usd",
     heroRaiseTo: 2.5,
     spotMode: "dealt",
-    speed: "step",
+    actionDelayMs: 0,
   },
 };
 

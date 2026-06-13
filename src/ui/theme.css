@@ -169,6 +169,30 @@ input:focus-visible {
   padding-top: 12px;
 }
 
+.speed-control {
+  display: grid;
+  grid-template-columns: auto minmax(96px, 160px) 56px;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid rgba(247, 244, 237, 0.14);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: rgba(7, 23, 20, 0.58);
+}
+
+.speed-control span,
+.speed-control output {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.speed-control input {
+  min-width: 0;
+  accent-color: var(--brass);
+}
+
 .phase-settings {
   display: flex;
   flex: 1 0 100%;
@@ -228,6 +252,12 @@ input:focus-visible {
 .button:disabled {
   cursor: not-allowed;
   opacity: 0.46;
+}
+
+.button--next-step {
+  border-color: rgba(142, 211, 134, 0.82);
+  color: #10241e;
+  background: linear-gradient(180deg, #bfe3a0, #8ed386);
 }
 
 .toggle {
@@ -323,10 +353,13 @@ input:focus-visible {
 
 .board-cards,
 .card-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
+  width: max-content;
+  max-width: 100%;
 }
 
 .board-cards {
@@ -425,11 +458,42 @@ input:focus-visible {
 }
 
 .seat--folded {
+  border-color: rgba(247, 244, 237, 0.1);
+  background: rgba(7, 23, 20, 0.66);
+}
+
+.seat--folded > .seat__title,
+.seat--folded .dealer-button,
+.seat--folded .commit-badge,
+.seat--folded .profile-badge {
   opacity: 0.62;
 }
 
-.seat--folded .card-row {
+.seat--folded > .card-row .card {
   opacity: 0.72;
+  filter: grayscale(0.35);
+}
+
+.fold-stamp {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 50%;
+  z-index: 3;
+  transform: translateY(-50%) rotate(-8deg);
+  border: 1px solid rgba(255, 209, 204, 0.9);
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: #fff4f2;
+  background: rgba(195, 74, 61, 0.9);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.36);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 
 .seat--acting {
@@ -516,6 +580,7 @@ input:focus-visible {
   background: #bfe3a0;
 }
 
+.action-badge,
 .commit-badge,
 .profile-badge {
   display: inline-flex;
@@ -526,6 +591,30 @@ input:focus-visible {
   padding: 0 8px;
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.action-badge {
+  border: 1px solid rgba(247, 244, 237, 0.2);
+  color: #f7f4ed;
+  background: rgba(247, 244, 237, 0.12);
+}
+
+.action-badge--aggressive {
+  border-color: rgba(201, 162, 39, 0.5);
+  color: #fff5cf;
+  background: rgba(201, 162, 39, 0.22);
+}
+
+.action-badge--fold {
+  border-color: rgba(195, 74, 61, 0.58);
+  color: #ffd1cc;
+  background: rgba(195, 74, 61, 0.2);
+}
+
+.action-badge--win {
+  border-color: rgba(142, 211, 134, 0.58);
+  color: #d6ffd1;
+  background: rgba(142, 211, 134, 0.18);
 }
 
 .commit-badge {
@@ -644,6 +733,7 @@ input:focus-visible {
   left: var(--range-popover-x, 0);
   bottom: calc(100% + 10px - var(--range-popover-y, 0px));
   width: min(360px, calc(100vw - 24px));
+  background: #071714;
 }
 
 .range-popover:not(.range-popover--placed) {
@@ -813,6 +903,39 @@ input:focus-visible {
 .hero-actions__presets button:hover {
   border-color: rgba(201, 162, 39, 0.72);
   background: rgba(201, 162, 39, 0.24);
+}
+
+.completion-cue {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(142, 211, 134, 0.46);
+  border-radius: 8px;
+  margin: 0 0 18px;
+  padding: 14px;
+  background: rgba(14, 58, 47, 0.72);
+}
+
+.completion-cue h3 {
+  margin: 0;
+  color: #d6ffd1;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+}
+
+.completion-cue p {
+  margin: 0;
+  color: #fff5cf;
+}
+
+.completion-cue__button {
+  min-height: 38px;
+  border: 1px solid rgba(142, 211, 134, 0.7);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: #10241e;
+  background: #8ed386;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .action-log {

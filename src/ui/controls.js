@@ -5,6 +5,9 @@ import { STREET_ORDER } from "../state.js";
 
 export function renderControls(container, state, actions) {
   container.replaceChildren();
+  const nextScriptedLabel = scriptedContinuationLabel(state);
+  const scriptedMode = Boolean(state.hand.preflop || state.hand.postflop);
+  const handTerminal = isTerminalHand(state);
 
   const controls = document.createElement("section");
   controls.className = "controls";
@@ -35,7 +38,7 @@ export function renderControls(container, state, actions) {
         label: STREET_LABELS[street],
       })),
       onChange: actions.setStreet,
-      disabled: Boolean(state.hand.preflop),
+      disabled: scriptedMode,
     }),
   );
 
@@ -43,23 +46,28 @@ export function renderControls(container, state, actions) {
     label: "Deal new hand",
     icon: "shuffle",
     onClick: () => actions.dealNewHand(),
+    highlight: handTerminal,
   });
 
   const nextButton = createButton({
-    label: "Next street",
+    label: nextScriptedLabel || "Next street",
     icon: "step-forward",
     onClick: actions.advanceStreet,
-    disabled: Boolean(state.hand.preflop) || state.hand.street === "showdown",
+    disabled: scriptedMode ? !nextScriptedLabel : state.hand.street === "showdown",
+    highlight: Boolean(nextScriptedLabel),
+    title: nextButtonTitle(state, nextScriptedLabel),
   });
 
   const replayButton = createButton({
-    label: "Replay seed",
+    label: "Replay hand",
     icon: "rotate-ccw",
     onClick: actions.replayHand,
     disabled: !state.hand.seed,
+    title: "Replay the same seed and starting stacks.",
   });
 
   controls.append(dealButton, nextButton, replayButton);
+  controls.append(createActionSpeedControl(state, actions));
 
   const revealLabel = document.createElement("label");
   revealLabel.className = "toggle";
@@ -83,6 +91,83 @@ export function renderControls(container, state, actions) {
   }
 
   container.append(controls);
+}
+
+function createActionSpeedControl(state, actions) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "speed-control";
+  wrapper.htmlFor = "action-speed";
+
+  const text = document.createElement("span");
+  text.textContent = "Pace";
+
+  const input = document.createElement("input");
+  input.id = "action-speed";
+  input.type = "range";
+  input.min = "0";
+  input.max = "1500";
+  input.step = "100";
+  input.value = String(state.ui.actionDelayMs || 0);
+  input.addEventListener("input", (event) => {
+    actions.setActionDelayMs(Number(event.currentTarget.value));
+  });
+
+  const value = document.createElement("output");
+  value.htmlFor = "action-speed";
+  value.textContent = actionSpeedLabel(state.ui.actionDelayMs || 0);
+
+  wrapper.append(text, input, value);
+  return wrapper;
+}
+
+function actionSpeedLabel(actionDelayMs) {
+  const delay = Number(actionDelayMs) || 0;
+
+  if (delay <= 0) {
+    return "Instant";
+  }
+
+  return `${(delay / 1000).toFixed(1)}s`;
+}
+
+function scriptedContinuationLabel(state) {
+  if (!state.hand.postflop && state.hand.preflop?.status === "complete" && state.hand.preflop.result === "wouldSeeFlop") {
+    return "Continue to flop";
+  }
+
+  if (state.hand.postflop?.status === "streetComplete") {
+    if (state.hand.postflop.street === "flop") {
+      return "Continue to turn";
+    }
+
+    if (state.hand.postflop.street === "turn") {
+      return "Continue to river";
+    }
+  }
+
+  return "";
+}
+
+function nextButtonTitle(state, label) {
+  if (label) {
+    return "";
+  }
+
+  if (state.hand.postflop?.status === "waitingHero" || state.hand.preflop?.status === "waitingHero") {
+    return "Hero action is required first.";
+  }
+
+  if (isTerminalHand(state)) {
+    return "Hand complete - deal a new hand to continue.";
+  }
+
+  return state.hand.preflop || state.hand.postflop ? "Action must close before the next street." : "";
+}
+
+function isTerminalHand(state) {
+  return state.hand.postflop?.status === "complete"
+    || (state.hand.preflop?.status === "complete" && state.hand.preflop.result === "winner")
+    || state.hand.street === "showdown";
 }
 
 function createPhaseFourSettings(state, actions) {
@@ -234,11 +319,15 @@ function createSelectControl({ id, label, value, options, onChange, disabled = f
   return wrapper;
 }
 
-function createButton({ label, icon, onClick, disabled = false }) {
+function createButton({ label, icon, onClick, disabled = false, highlight = false, title = "" }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "button";
+  button.classList.toggle("button--next-step", highlight);
   button.disabled = disabled;
+  if (title) {
+    button.title = title;
+  }
   button.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i><span>${label}</span>`;
   button.addEventListener("click", onClick);
   return button;
