@@ -35,6 +35,7 @@ describe("deck", () => {
     expect(boardForStreet(runout, "preflop")).toEqual([]);
     expect(boardForStreet(runout, "flop")).toEqual(["As", "Kd", "7h"]);
     expect(boardForStreet(runout, "turn")).toEqual(["As", "Kd", "7h", "2c"]);
+    expect(boardForStreet(runout, "river")).toEqual(runout);
     expect(boardForStreet(runout, "showdown")).toEqual(runout);
   });
 });

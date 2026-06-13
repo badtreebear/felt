@@ -1,4 +1,4 @@
-import { createIcons, RotateCcw, Shuffle, StepForward } from "lucide";
+import { createIcons, RefreshCcw, RotateCcw, Shuffle, StepForward } from "lucide";
 import { boardForStreet, dealHoldemHand, nextStreet, STREET_LABELS } from "./engine/deck.js";
 import { getOpeningRangeLoadError } from "./data/ranges/opening-ranges.js";
 import { evCall } from "./engine/ev.js";
@@ -26,6 +26,8 @@ if (!app) {
   throw new Error("App root not found.");
 }
 
+
+
 app.innerHTML = `
   <div class="app-shell">
     <header class="app-header">
@@ -49,11 +51,13 @@ let equityRequestId = 0;
 let autoActionTimer = null;
 
 const actions = {
-  dealNewHand(seed) {
+  dealNewHand(seed, { resetStacks = false } = {}) {
     clearAutoActionTimer();
     const players = state.config.players;
     const heroSeat = Math.floor(players / 2);
-    const startingStacks = startingStacksForNextHand({ seed, players, heroSeat });
+    const startingStacks = resetStacks
+      ? defaultStacksForPlayers(players, state.config.stack)
+      : startingStacksForNextHand({ seed, players, heroSeat });
     const autoActionLimit = autoActionLimitForState(state);
     const manualSpot = state.ui.spotMode === "manual"
       ? { pot: state.hand.pot || 24, toCall: state.hand.toCall || 8 }
@@ -97,6 +101,10 @@ const actions = {
     if (state.hand.seed) {
       actions.dealNewHand(state.hand.seed);
     }
+  },
+  newGame() {
+    // Reset every seat to the configured starting stack and deal fresh.
+    actions.dealNewHand(undefined, { resetStacks: true });
   },
   setPlayers(players) {
     clearAutoActionTimer();
@@ -344,6 +352,7 @@ subscribe("*", () => {
   renderTable(tableRoot, state, actions);
   createIcons({
     icons: {
+      RefreshCcw,
       RotateCcw,
       Shuffle,
       StepForward,
@@ -563,10 +572,15 @@ function ensureSeatProfiles(config) {
 }
 
 function startingStacksForNextHand({ seed, players }) {
+  // Replaying a specific hand: reuse the exact stacks it started with so the
+  // replay stays deterministic.
   if (seed && state.hand.startingStacks) {
     return normalizeStacksForPlayers(state.hand.startingStacks, players, state.config.stack);
   }
 
+  // A fresh hand carries over the stacks from the completed hand so the table
+  // plays as a continuous session (stacks grow/shrink with results). Use the
+  // "New game" control to reset everyone to the configured stack.
   const completedPhase = completedPhaseForStacks(state);
 
   if (!seed && completedPhase?.stacks) {
@@ -668,4 +682,9 @@ function actionLogForStreet(hand, heroSeat, street) {
     ...entry,
     streetLabel: STREET_LABELS[entry.street],
   }));
+}
+
+if (import.meta.env.DEV) {
+  window.__feltState = () => state;
+  window.__feltActions = actions;
 }

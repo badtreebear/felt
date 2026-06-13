@@ -45,7 +45,7 @@ export const state = {
     displayUnit: "usd",
     heroRaiseTo: 2.5,
     spotMode: "dealt",
-    actionDelayMs: 0,
+    actionDelayMs: 1000,
   },
 };
 

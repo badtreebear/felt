@@ -66,7 +66,14 @@ export function renderControls(container, state, actions) {
     title: "Replay the same seed and starting stacks.",
   });
 
-  controls.append(dealButton, nextButton, replayButton);
+  const newGameButton = createButton({
+    label: "New game",
+    icon: "refresh-ccw",
+    onClick: actions.newGame,
+    title: "Reset every seat to the starting stack and deal a fresh game.",
+  });
+
+  controls.append(dealButton, nextButton, replayButton, newGameButton);
   controls.append(createActionSpeedControl(state, actions));
 
   const revealLabel = document.createElement("label");

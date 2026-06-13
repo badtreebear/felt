@@ -15,6 +15,16 @@ import { rangePopoverPlacement } from "./range-popover-placement.js";
 const RANGE_CLOSE_DELAY_MS = 120;
 let rangeCloseTimer = null;
 
+const SUIT_GLYPHS = { s: "♠", h: "♥", d: "♦", c: "♣" };
+
+// Render embedded card codes (e.g. "Jh", "Tc") as rank + suit glyph ("J♥",
+// "10♣") in action-log text. Suit colour is left as the surrounding text.
+function withSuitGlyphs(text) {
+  return text.replace(/\b([2-9TJQKA])([shdc])\b/g, (match, rank, suit) => (
+    `${rank === "T" ? "10" : rank}${SUIT_GLYPHS[suit]}`
+  ));
+}
+
 export function renderTable(container, state, actions) {
   container.replaceChildren();
 
@@ -224,6 +234,8 @@ function createLastActionBadge({ state, seat }) {
 }
 
 function latestSeatAction(actionLog, seat, state) {
+  const currentStreet = state.hand.street;
+
   for (let index = actionLog.length - 1; index >= 0; index -= 1) {
     const entry = actionLog[index];
 
@@ -231,7 +243,16 @@ function latestSeatAction(actionLog, seat, state) {
       continue;
     }
 
-    return formatSeatAction(entry, state);
+    // A fold persists for the rest of the hand, regardless of street.
+    if (entry.action === "folds") {
+      return formatSeatAction(entry, state);
+    }
+
+    // Call/check/raise/bet badges only apply to the current street, so they
+    // clear when the hand advances to the next street.
+    if (entry.street === currentStreet) {
+      return formatSeatAction(entry, state);
+    }
   }
 
   return null;
@@ -461,11 +482,12 @@ function createHandPanel(state, showdown, actions) {
 
   const log = document.createElement("ol");
   log.className = "action-log";
+  log.reversed = true;
 
-  state.hand.actionLog.forEach((entry) => {
+  [...state.hand.actionLog].reverse().forEach((entry) => {
     const item = document.createElement("li");
     const size = entry.size ? ` ${formatAmount(entry.size, state)}` : "";
-    item.textContent = `${STREET_LABELS[entry.street]}: ${seatLabel(entry.seat, state.config.heroSeat)} ${entry.action}${size}`;
+    item.textContent = withSuitGlyphs(`${STREET_LABELS[entry.street]}: ${seatLabel(entry.seat, state.config.heroSeat)} ${entry.action}${size}`);
     log.append(item);
   });
 
@@ -516,9 +538,10 @@ function createPreflopHeroActionControls(state, actions) {
   const buttonRow = document.createElement("div");
   buttonRow.className = "hero-actions__row";
 
+  const callIsAllIn = legal.callAmount > 0 && legal.callAmount >= legal.stack;
   const foldButton = createHeroActionButton("Fold", () => actions.heroPreflopAction("fold"));
   const callLabel = legal.callAmount > 0
-    ? `Call ${formatAmount(legal.callAmount, state)}`
+    ? (callIsAllIn ? `All in ${formatAmount(legal.stack, state)}` : `Call ${formatAmount(legal.callAmount, state)}`)
     : "Check";
   const callButton = createHeroActionButton(callLabel, () => actions.heroPreflopAction("call"));
 
@@ -545,6 +568,14 @@ function createPreflopHeroActionControls(state, actions) {
 
   raiseRow.append(input, raiseButton);
 
+  // All-in raise (only when the hero has chips beyond a call).
+  if (!callIsAllIn && legal.maxRaiseTo > legal.callAmount) {
+    raiseRow.append(createHeroActionButton(
+      `All in ${formatAmount(legal.maxRaiseTo, state)}`,
+      () => actions.heroPreflopAction("raise", legal.maxRaiseTo),
+    ));
+  }
+
   const presetRow = document.createElement("div");
   presetRow.className = "hero-actions__presets";
 
@@ -568,9 +599,10 @@ function createPostflopHeroActionControls(state, actions) {
     return null;
   }
 
+  const effectiveMinBet = Math.min(legal.minBet, legal.maxBet);
   const betAmount = clampAmount(
     state.ui.heroRaiseTo || state.hand.postflop.suggestedHeroBet || legal.minBet,
-    legal.minBet,
+    effectiveMinBet,
     legal.maxBet,
   );
   const wrapper = document.createElement("section");
@@ -584,9 +616,13 @@ function createPostflopHeroActionControls(state, actions) {
   buttonRow.className = "hero-actions__row";
 
   if (legal.callAmount > 0) {
+    const callIsAllIn = legal.callAmount >= legal.maxBet;
+    const callLabel = callIsAllIn
+      ? `All in ${formatAmount(legal.maxBet, state)}`
+      : `Call ${formatAmount(legal.callAmount, state)}`;
     buttonRow.append(
       createHeroActionButton("Fold", () => actions.heroPostflopAction("fold")),
-      createHeroActionButton(`Call ${formatAmount(legal.callAmount, state)}`, () => actions.heroPostflopAction("call")),
+      createHeroActionButton(callLabel, () => actions.heroPostflopAction("call")),
     );
     wrapper.append(heading, buttonRow);
     return wrapper;
@@ -599,7 +635,7 @@ function createPostflopHeroActionControls(state, actions) {
 
   const input = document.createElement("input");
   input.type = "number";
-  input.min = String(legal.minBet);
+  input.min = String(effectiveMinBet);
   input.max = String(legal.maxBet);
   input.step = "0.5";
   input.value = String(betAmount);
@@ -612,6 +648,14 @@ function createPostflopHeroActionControls(state, actions) {
     input,
     createHeroActionButton(`Bet ${formatAmount(betAmount, state)}`, () => actions.heroPostflopAction("bet", betAmount)),
   );
+
+  // All-in bet shoves the hero's full remaining stack.
+  if (legal.maxBet > 0 && legal.maxBet > betAmount) {
+    betRow.append(createHeroActionButton(
+      `All in ${formatAmount(legal.maxBet, state)}`,
+      () => actions.heroPostflopAction("bet", legal.maxBet),
+    ));
+  }
 
   const presetRow = document.createElement("div");
   presetRow.className = "hero-actions__presets";
@@ -711,7 +755,7 @@ function preflopResultText(state) {
   }
 
   if (preflop.result === "winner") {
-    return `${seatLabel(preflop.winnerSeat, state.config.heroSeat)} wins preflop.`;
+    return `${seatLabel(preflop.winnerSeat, state.config.heroSeat)} wins preflop uncontested.`;
   }
 
   return "Preflop complete - continue to flop.";
@@ -733,7 +777,7 @@ function postflopResultText(state) {
   }
 
   if (postflop.result === "winner") {
-    return `${seatLabel(postflop.winnerSeat, state.config.heroSeat)} wins ${postflop.street}.`;
+    return `${seatLabel(postflop.winnerSeat, state.config.heroSeat)} wins the ${postflop.street} uncontested.`;
   }
 
   if (postflop.result === "showdown") {

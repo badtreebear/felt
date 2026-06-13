@@ -1,6 +1,5 @@
 import pokerSolver from "pokersolver";
 import { boardForStreet } from "./deck.js";
-import { resolveShowdown } from "./hand-eval.js";
 import { normalizeProfile } from "./player-model.js";
 import { getSeatPositions } from "./positions.js";
 
@@ -302,25 +301,51 @@ function closeStreet(postflop) {
 }
 
 function completeShowdown(postflop) {
-  const liveHoleCards = Object.fromEntries(activeSeats(postflop).map((seat) => [seat, postflop.holeCards[seat]]));
-  const showdown = resolveShowdown({ holeCards: liveHoleCards, board: postflop.board });
-  const shares = splitPot(postflop.pot, showdown.winnerSeats);
-
-  showdown.winnerSeats.forEach((seat) => {
-    postflop.stacks[seat] = roundAmount((postflop.stacks[seat] || 0) + shares[seat]);
+  const live = activeSeats(postflop);
+  const solvedBySeat = {};
+  live.forEach((seat) => {
+    solvedBySeat[seat] = Hand.solve([...(postflop.holeCards[seat] || []), ...postflop.board]);
   });
+
+  // Distribute across main + side pots by each seat's total contribution to the
+  // hand. Folded players' chips remain in the pots but they can't win them.
+  const pots = buildSidePots(postflop.contributions, postflop.folded, postflop.players);
+  const shares = {};
+
+  pots.forEach((pot) => {
+    let eligible = pot.eligible.filter((seat) => solvedBySeat[seat]);
+    if (eligible.length === 0) {
+      eligible = live;
+    }
+    const winningHands = Hand.winners(eligible.map((seat) => solvedBySeat[seat]));
+    const winners = eligible.filter((seat) => winningHands.includes(solvedBySeat[seat]));
+    const split = splitAmount(pot.amount, winners);
+    winners.forEach((seat) => {
+      shares[seat] = roundAmount((shares[seat] || 0) + (split[seat] || 0));
+    });
+  });
+
+  Object.entries(shares).forEach(([seat, amount]) => {
+    postflop.stacks[seat] = roundAmount((postflop.stacks[seat] || 0) + amount);
+  });
+
+  // Headline winner = best hand among all live seats (always wins the main pot).
+  const overallHands = Hand.winners(live.map((seat) => solvedBySeat[seat]));
+  const overallWinners = live.filter((seat) => overallHands.includes(solvedBySeat[seat]));
+  const winnerSeats = Object.keys(shares).map(Number).sort((a, b) => a - b);
+  const description = solvedBySeat[overallWinners[0]]?.descr || "";
 
   postflop.status = "complete";
   postflop.result = "showdown";
-  postflop.winnerSeats = showdown.winnerSeats;
-  postflop.winnerSeat = showdown.winnerSeats.length === 1 ? showdown.winnerSeats[0] : null;
-  postflop.showdownDescription = showdown.winningDescription;
+  postflop.winnerSeats = winnerSeats;
+  postflop.winnerSeat = winnerSeats.length === 1 ? winnerSeats[0] : null;
+  postflop.showdownDescription = description;
   postflop.currentSeat = null;
   postflop.actionLog.push(logEntry({
-    seat: showdown.winnerSeats[0],
+    seat: overallWinners[0],
     street: "showdown",
-    action: `wins showdown with ${showdown.winningDescription}`,
-    size: postflop.pot,
+    action: `wins showdown with ${description}`,
+    size: pots.reduce((sum, pot) => sum + pot.amount, 0),
   }));
 }
 
@@ -336,15 +361,54 @@ function awardOnlyActivePlayer(postflop) {
   postflop.actionLog.push(logEntry({ seat: winnerSeat, street: postflop.street, action: "wins pot", size: postflop.pot }));
 }
 
-function splitPot(pot, winnerSeats) {
-  const chipUnits = Math.round(roundAmount(pot) * 2);
-  const baseUnits = Math.floor(chipUnits / winnerSeats.length);
-  const extraUnits = chipUnits % winnerSeats.length;
+export function splitAmount(amount, seats) {
+  if (!seats.length) {
+    return {};
+  }
 
-  return Object.fromEntries(winnerSeats.map((seat, index) => [
+  const chipUnits = Math.round(roundAmount(amount) * 2);
+  const baseUnits = Math.floor(chipUnits / seats.length);
+  const extraUnits = chipUnits % seats.length;
+
+  return Object.fromEntries(seats.map((seat, index) => [
     seat,
     (baseUnits + (index < extraUnits ? 1 : 0)) / 2,
   ]));
+}
+
+// Build main + side pots from each seat's total contribution. Returns an
+// ordered list of { amount, eligible } where eligible = non-folded contributors
+// who can win that layer.
+export function buildSidePots(contributions, folded, players) {
+  const contrib = {};
+  for (let seat = 0; seat < players; seat += 1) {
+    const amount = roundAmount(contributions[seat] || 0);
+    if (amount > 0) {
+      contrib[seat] = amount;
+    }
+  }
+
+  const levels = [...new Set(Object.values(contrib))].sort((first, second) => first - second);
+  const pots = [];
+  let previousLevel = 0;
+
+  levels.forEach((level) => {
+    const contributors = Object.keys(contrib)
+      .map(Number)
+      .filter((seat) => contrib[seat] >= level);
+    const amount = roundAmount((level - previousLevel) * contributors.length);
+
+    if (amount > 0) {
+      pots.push({
+        amount,
+        eligible: contributors.filter((seat) => !folded[seat]),
+      });
+    }
+
+    previousLevel = level;
+  });
+
+  return pots;
 }
 
 function betSizeForProfile({ pot, stack, profile }) {

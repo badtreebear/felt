@@ -97,6 +97,7 @@ export function legalHeroActions(preflop) {
     callAmount,
     minRaiseTo,
     maxRaiseTo: preflop.contributions[preflop.heroSeat] + preflop.stacks[preflop.heroSeat],
+    stack: preflop.stacks[preflop.heroSeat] || 0,
   };
 }
 
