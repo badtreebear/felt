@@ -27,11 +27,18 @@ export function createRangeGrid({ range, heroCards }) {
       const cell = document.createElement("span");
       const value = range.grid[row][column];
       const label = rangeCellLabel(row, column);
+      const weight = rangeCellWeight(value);
+      const action = rangeCellAction(value);
       cell.className = "range-cell";
       cell.classList.toggle("range-cell--open", value === 1);
-      cell.classList.toggle("range-cell--mixed", value > 0 && value < 1);
+      cell.classList.toggle("range-cell--mixed", weight > 0 && weight < 1);
+      cell.classList.toggle("range-cell--call", action === "call");
+      cell.classList.toggle("range-cell--threebet-value", action === "threeBetValue");
+      cell.classList.toggle("range-cell--threebet-bluff", action === "threeBetBluff");
+      cell.classList.toggle("range-cell--fourbet-value", action === "fourBetValue");
+      cell.classList.toggle("range-cell--fourbet-bluff", action === "fourBetBluff");
       cell.classList.toggle("range-cell--hero", verdict.cell?.row === row && verdict.cell?.column === column);
-      cell.style.setProperty("--range-frequency", value);
+      cell.style.setProperty("--range-frequency", weight);
       cell.setAttribute("role", "gridcell");
       cell.setAttribute("aria-label", `${label} ${rangeCellStatus(value)}`);
       cell.textContent = label;
@@ -47,12 +54,18 @@ export function heroRangeVerdict(heroCards, grid) {
   const cell = handCell(heroCards);
   const handLabel = cell ? rangeCellLabel(cell.row, cell.column) : "--";
   const value = cell && grid ? grid[cell.row][cell.column] : 0;
+  const action = rangeCellAction(value);
+  const weight = rangeCellWeight(value);
 
-  if (value === 1) {
+  if (action) {
+    return { cell, handLabel, status: actionLabel(action) };
+  }
+
+  if (weight === 1) {
     return { cell, handLabel, status: "in range" };
   }
 
-  if (value > 0 && value < 1) {
+  if (weight > 0 && weight < 1) {
     return { cell, handLabel, status: "mixed" };
   }
 
@@ -121,13 +134,60 @@ function createRangeSource(range) {
 }
 
 function rangeCellStatus(value) {
-  if (value === 1) {
+  const action = rangeCellAction(value);
+  const weight = rangeCellWeight(value);
+
+  if (action) {
+    return actionLabel(action);
+  }
+
+  if (weight === 1) {
     return "open";
   }
 
-  if (value > 0 && value < 1) {
-    return `${Math.round(value * 100)}% open`;
+  if (weight > 0 && weight < 1) {
+    return `${Math.round(weight * 100)}% open`;
   }
 
   return "fold";
+}
+
+function rangeCellWeight(value) {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (value && typeof value === "object") {
+    return Number(value.weight) || 0;
+  }
+
+  return 0;
+}
+
+function rangeCellAction(value) {
+  return value && typeof value === "object" ? value.action : null;
+}
+
+function actionLabel(action) {
+  if (action === "call") {
+    return "call";
+  }
+
+  if (action === "threeBetValue") {
+    return "3-bet for value";
+  }
+
+  if (action === "threeBetBluff") {
+    return "3-bet bluff";
+  }
+
+  if (action === "fourBetValue") {
+    return "4-bet for value";
+  }
+
+  if (action === "fourBetBluff") {
+    return "4-bet bluff";
+  }
+
+  return "in range";
 }

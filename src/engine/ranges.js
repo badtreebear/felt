@@ -1,6 +1,14 @@
 import { RANKS, SUITS } from "./deck.js";
 
 export const RFI_POSITIONS_9MAX = ["UTG", "UTG+1", "UTG+2", "LJ", "HJ", "CO", "BTN"];
+const PREFLOP_TOTAL_COMBOS = 1326;
+export const ACTION_RANGE_ACTIONS = [
+  "threeBetValue",
+  "threeBetBluff",
+  "fourBetValue",
+  "fourBetBluff",
+  "call",
+];
 
 export function validateRangeChart(chart) {
   if (!chart || typeof chart !== "object") {
@@ -87,12 +95,148 @@ export function validateRfiChart(chart, { positions = RFI_POSITIONS_9MAX } = {})
   return chart;
 }
 
+export function validateVsRfiChart(chart) {
+  validateActionRangeChart(chart);
+
+  Object.entries(chart.spots).forEach(([key, spot]) => {
+    if (!spot.responderPosition || typeof spot.responderPosition !== "string") {
+      throw new Error(`Facing RFI spot ${key} is missing responderPosition.`);
+    }
+
+    if (!Array.isArray(spot.openerPositions) || spot.openerPositions.length === 0) {
+      throw new Error(`Facing RFI spot ${key} is missing openerPositions.`);
+    }
+
+    if (!spot.comboCounts || typeof spot.comboCounts !== "object") {
+      throw new Error(`Facing RFI spot ${key} is missing comboCounts.`);
+    }
+
+    const actualCounts = actionRangeComboCounts(spot.actions);
+    Object.entries(actualCounts).forEach(([action, count]) => {
+      if (spot.comboCounts[action] !== count) {
+        throw new Error(`Facing RFI combo count mismatch for ${key} ${action}: expected ${spot.comboCounts[action]}, got ${count}.`);
+      }
+    });
+  });
+
+  return chart;
+}
+
+export function validateVsThreeBetChart(chart) {
+  validateActionRangeChart(chart);
+
+  Object.entries(chart.spots).forEach(([key, spot]) => {
+    if (!spot.openerPosition || typeof spot.openerPosition !== "string") {
+      throw new Error(`Facing 3-bet spot ${key} is missing openerPosition.`);
+    }
+
+    if (!Array.isArray(spot.threeBettorPositions) || spot.threeBettorPositions.length === 0) {
+      throw new Error(`Facing 3-bet spot ${key} is missing threeBettorPositions.`);
+    }
+
+    if (!Number.isInteger(spot.openingRangeCombos) || spot.openingRangeCombos < 0) {
+      throw new Error(`Facing 3-bet spot ${key} is missing openingRangeCombos.`);
+    }
+
+    if (!Number.isInteger(spot.foldToThreeBetCombos) || spot.foldToThreeBetCombos < 0) {
+      throw new Error(`Facing 3-bet spot ${key} is missing foldToThreeBetCombos.`);
+    }
+
+    if (!Number.isInteger(spot.notInOpeningRangeCombos) || spot.notInOpeningRangeCombos < 0) {
+      throw new Error(`Facing 3-bet spot ${key} is missing notInOpeningRangeCombos.`);
+    }
+
+    if (!spot.comboCounts || typeof spot.comboCounts !== "object") {
+      throw new Error(`Facing 3-bet spot ${key} is missing comboCounts.`);
+    }
+
+    const actualCounts = actionRangeComboCounts(spot.actions);
+    Object.entries(actualCounts).forEach(([action, count]) => {
+      if (spot.comboCounts[action] !== count) {
+        throw new Error(`Facing 3-bet combo count mismatch for ${key} ${action}: expected ${spot.comboCounts[action]}, got ${count}.`);
+      }
+    });
+
+    const continueCombos = Object.values(actualCounts).reduce((sum, count) => sum + count, 0);
+    const rangeCombos = continueCombos + spot.foldToThreeBetCombos;
+
+    if (rangeCombos !== spot.openingRangeCombos) {
+      throw new Error(`Facing 3-bet opening range mismatch for ${key}: expected ${spot.openingRangeCombos}, got ${rangeCombos}.`);
+    }
+
+    const totalCombos = rangeCombos + spot.notInOpeningRangeCombos;
+
+    if (totalCombos !== PREFLOP_TOTAL_COMBOS) {
+      throw new Error(`Facing 3-bet total combo mismatch for ${key}: expected ${PREFLOP_TOTAL_COMBOS}, got ${totalCombos}.`);
+    }
+
+    validateComboPercentages({ key, spot, actualCounts });
+  });
+
+  return chart;
+}
+
+export function validateActionRangeChart(chart) {
+  if (!chart || typeof chart !== "object") {
+    throw new Error("Action range chart must be an object.");
+  }
+
+  if (!chart.meta || typeof chart.meta !== "object") {
+    throw new Error("Action range chart is missing meta.");
+  }
+
+  if (chart.meta.source === undefined || chart.meta.source === "") {
+    throw new Error("Action range chart meta.source is required.");
+  }
+
+  if (!Number.isInteger(chart.meta.tableSize) || chart.meta.tableSize < 2 || chart.meta.tableSize > 9) {
+    throw new Error("Action range chart meta.tableSize must be an integer from 2 to 9.");
+  }
+
+  if (!chart.spots || typeof chart.spots !== "object") {
+    throw new Error("Action range chart is missing spots.");
+  }
+
+  Object.entries(chart.spots).forEach(([key, spot]) => {
+    if (!spot || typeof spot !== "object" || Array.isArray(spot)) {
+      throw new Error(`Action range spot ${key} must be an object.`);
+    }
+
+    if (!spot.actions || typeof spot.actions !== "object" || Array.isArray(spot.actions)) {
+      throw new Error(`Action range spot ${key} is missing actions.`);
+    }
+
+    Object.entries(spot.actions).forEach(([hand, action]) => {
+      if (!isCanonicalHandKey(hand)) {
+        throw new Error(`Unknown hand key in ${key}: ${hand}`);
+      }
+
+      if (!ACTION_RANGE_ACTIONS.includes(action)) {
+        throw new Error(`Unknown action range value in ${key} ${hand}: ${action}`);
+      }
+    });
+  });
+
+  return chart;
+}
+
 export function rangeToGrid(positionRange) {
   const grid = Array.from({ length: RANKS.length }, () => Array.from({ length: RANKS.length }, () => 0));
 
   Object.entries(positionRange || {}).forEach(([hand, value]) => {
     const cell = handKeyToCell(hand);
     grid[cell.row][cell.column] = value;
+  });
+
+  return grid;
+}
+
+export function actionRangeToGrid(actionRange) {
+  const grid = Array.from({ length: RANKS.length }, () => Array.from({ length: RANKS.length }, () => null));
+
+  Object.entries(actionRange || {}).forEach(([hand, action]) => {
+    const cell = handKeyToCell(hand);
+    grid[cell.row][cell.column] = { action, weight: 1 };
   });
 
   return grid;
@@ -106,6 +250,57 @@ export function expandPositionRange(positionRange) {
       cards,
       weight,
     })));
+}
+
+export function actionRangeComboCounts(actionRange) {
+  // Combo counts per action; consumed by contextual ranges + chart validation.
+  return Object.entries(actionRange || {}).reduce((counts, [hand, action]) => {
+    counts[action] = (counts[action] || 0) + handKeyToCombos(hand).length;
+    return counts;
+  }, {});
+}
+
+function validateComboPercentages({ key, spot, actualCounts }) {
+  if (!spot.comboPercentages || typeof spot.comboPercentages !== "object") {
+    throw new Error(`Facing 3-bet spot ${key} is missing comboPercentages.`);
+  }
+
+  if (!spot.openingRangePercentages || typeof spot.openingRangePercentages !== "object") {
+    throw new Error(`Facing 3-bet spot ${key} is missing openingRangePercentages.`);
+  }
+
+  const counts = {
+    ...actualCounts,
+    foldToThreeBet: spot.foldToThreeBetCombos,
+    notInOpeningRange: spot.notInOpeningRangeCombos,
+  };
+
+  Object.entries(counts).forEach(([action, count]) => {
+    const expected = roundPercentage(count, PREFLOP_TOTAL_COMBOS);
+
+    if (spot.comboPercentages[action] !== expected) {
+      throw new Error(`Facing 3-bet combo percentage mismatch for ${key} ${action}: expected ${expected}, got ${spot.comboPercentages[action]}.`);
+    }
+  });
+
+  Object.entries({
+    ...actualCounts,
+    foldToThreeBet: spot.foldToThreeBetCombos,
+  }).forEach(([action, count]) => {
+    const expected = roundPercentage(count, spot.openingRangeCombos);
+
+    if (spot.openingRangePercentages[action] !== expected) {
+      throw new Error(`Facing 3-bet opening range percentage mismatch for ${key} ${action}: expected ${expected}, got ${spot.openingRangePercentages[action]}.`);
+    }
+  });
+}
+
+function roundPercentage(count, total) {
+  if (!total) {
+    return 0;
+  }
+
+  return Math.round((count / total) * 1000) / 10;
 }
 
 export function getChartPositionRange(chart, position) {

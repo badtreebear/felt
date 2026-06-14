@@ -121,6 +121,7 @@ function createInitialPreflopState({ hand, config, seatProfiles }) {
     status: "active",
     result: null,
     winnerSeat: null,
+    winnerSeats: [],
     heroSeat,
     players,
     buttonSeat,
@@ -286,6 +287,8 @@ function completeOpenAction(preflop) {
 
   preflop.status = "complete";
   preflop.result = "wouldSeeFlop";
+  preflop.winnerSeat = null;
+  preflop.winnerSeats = [];
 
   preflop.actionLog.push({
     seat: preflop.aggressorSeat ?? preflop.bbSeat,
@@ -379,6 +382,7 @@ function clonePreflop(preflop) {
     allIn: { ...preflop.allIn },
     toAct: [...preflop.toAct],
     actionLog: [...preflop.actionLog],
+    winnerSeats: [...(preflop.winnerSeats || [])],
     holeCards: preflop.holeCards,
   };
 }

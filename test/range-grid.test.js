@@ -28,6 +28,29 @@ describe("range grid", () => {
     expect(nineMax.grid.every((row) => row.length === 13)).toBe(true);
   });
 
+  it("uses the shipped 6-max SB opening chart when first in", () => {
+    const smallBlind = getOpeningRange({ players: 6, position: "SB" });
+
+    expect(smallBlind.chartAvailable).toBe(true);
+    expect(smallBlind.tableSize).toBe(6);
+    expect(smallBlind.position).toBe("SB");
+    expect(smallBlind.combos).toHaveLength(838);
+  });
+
+  it("describes action-valued cells for defend charts", () => {
+    const grid = Array.from({ length: 13 }, () => Array.from({ length: 13 }, () => null));
+    grid[0][0] = { action: "threeBetValue", weight: 1 };
+
+    expect(heroRangeVerdict(["Ah", "Ad"], grid).status).toBe("3-bet for value");
+  });
+
+  it("describes action-valued cells for 4-bet continuation charts", () => {
+    const grid = Array.from({ length: 13 }, () => Array.from({ length: 13 }, () => null));
+    grid[0][0] = { action: "fourBetValue", weight: 1 };
+
+    expect(heroRangeVerdict(["Ah", "Ad"], grid).status).toBe("4-bet for value");
+  });
+
   it("returns a neutral no-chart range for blinds", () => {
     const smallBlind = getOpeningRange({ players: 9, position: "SB" });
     const bigBlind = getOpeningRange({ players: 9, position: "BB" });

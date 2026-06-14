@@ -109,6 +109,28 @@ describe("postflop action engine", () => {
       2: 103,
     });
   });
+
+  it("does not count returned uncalled side-pot chips as a showdown winner", () => {
+    const showdown = startPostflopStreet({
+      hand: uncalledSidePotReturnHand(),
+      config: tableConfig({ players: 3, heroSeat: 2 }),
+      street: "river",
+      seatProfiles: {
+        0: "standard",
+        1: "standard",
+      },
+    });
+
+    expect(showdown.status).toBe("complete");
+    expect(showdown.result).toBe("showdown");
+    expect(showdown.winnerSeats).toEqual([2]);
+    expect(showdown.stacks).toEqual({
+      0: 25,
+      1: 100,
+      2: 150,
+    });
+    expect(totalStacks(showdown)).toBe(275);
+  });
 });
 
 function tableConfig(overrides = {}) {
@@ -192,6 +214,40 @@ function threeWayChopHand() {
       stacks: { 0: 100, 1: 100, 2: 100 },
       contributions: { 0: 3.5, 1: 3.5, 2: 3 },
     }),
+  };
+}
+
+function uncalledSidePotReturnHand() {
+  return {
+    seed: "postflop-uncalled-side-return",
+    buttonSeat: 1,
+    boardRunout: ["Ts", "Ac", "7s", "Qh", "7h"],
+    holeCards: {
+      0: ["Jh", "9s"],
+      1: ["2c", "3d"],
+      2: ["8d", "7c"],
+    },
+    preflop: completedPreflop({
+      players: 3,
+      pot: 175,
+      stacks: { 0: 0, 1: 100, 2: 0 },
+      contributions: { 0: 100, 1: 0, 2: 75 },
+    }),
+    postflop: {
+      ...completedPreflop({
+        players: 3,
+        pot: 175,
+        stacks: { 0: 0, 1: 100, 2: 0 },
+        contributions: { 0: 100, 1: 0, 2: 75 },
+      }),
+      status: "streetComplete",
+      result: "nextStreet",
+      street: "turn",
+      board: ["Ts", "Ac", "7s", "Qh"],
+      folded: { 0: false, 1: true, 2: false },
+      allIn: { 0: true, 1: false, 2: true },
+      streetContributions: { 0: 0, 1: 0, 2: 0 },
+    },
   };
 }
 

@@ -5,18 +5,34 @@ import {
   rangeToGrid,
   validateRfiChart,
 } from "../../engine/ranges.js";
+import pokerCoachingRfi6MaxChart from "./pokercoaching-rfi-6max.json";
 import pokerCoachingRfiChart from "./pokercoaching-rfi-9max.json";
 
-const { chart, error: chartError } = loadOpeningChart();
+const OPENING_CHARTS = {
+  "6max": pokerCoachingRfi6MaxChart,
+  "9max": pokerCoachingRfiChart,
+};
+
+const VALIDATED_OPENING_CHARTS = {
+  "6max": loadOpeningChart(pokerCoachingRfi6MaxChart, {
+    positions: ["LJ", "HJ", "CO", "BTN", "SB"],
+  }),
+  "9max": loadOpeningChart(pokerCoachingRfiChart),
+};
 
 export function getOpeningRange({ players, position }) {
-  const rangePosition = positionToRfiLabel(position);
+  const bucket = rangeBucketForPlayers(players);
+  const sourceChart = OPENING_CHARTS[bucket] || pokerCoachingRfiChart;
+  const { chart, error: chartError } = VALIDATED_OPENING_CHARTS[bucket] || VALIDATED_OPENING_CHARTS["9max"];
+  const rangePosition = chart?.positions?.[position] ? position : positionToRfiLabel(position);
 
   if (chartError) {
     return unavailableRange({
       players,
       position,
       rangePosition,
+      sourceChart,
+      chartError,
       message: "RFI chart failed to load.",
       error: chartError.message,
     });
@@ -27,6 +43,8 @@ export function getOpeningRange({ players, position }) {
       players,
       position,
       rangePosition,
+      sourceChart,
+      chartError,
       message: `No RFI chart for ${position} yet.`,
     });
   }
@@ -34,7 +52,7 @@ export function getOpeningRange({ players, position }) {
   const positionRange = getChartPositionRange(chart, rangePosition);
 
   return {
-    bucket: rangeBucketForPlayers(players),
+    bucket,
     source: chart.meta.source,
     url: chart.meta.url,
     meta: chart.meta,
@@ -50,25 +68,25 @@ export function getOpeningRange({ players, position }) {
 }
 
 export function getOpeningRangeLoadError() {
-  return chartError;
+  return VALIDATED_OPENING_CHARTS["9max"].error || VALIDATED_OPENING_CHARTS["6max"].error;
 }
 
-function loadOpeningChart() {
+function loadOpeningChart(chart, options = {}) {
   try {
-    return { chart: validateRfiChart(pokerCoachingRfiChart), error: null };
+    return { chart: validateRfiChart(chart, options), error: null };
   } catch (error) {
     console.error("Failed to load PokerCoaching RFI chart.", error);
     return { chart: null, error };
   }
 }
 
-function unavailableRange({ players, position, rangePosition, message, error = null }) {
+function unavailableRange({ players, position, rangePosition, sourceChart, chartError, message, error = null }) {
   return {
     bucket: rangeBucketForPlayers(players),
-    source: pokerCoachingRfiChart.meta?.source || "",
-    url: pokerCoachingRfiChart.meta?.url || "",
-    meta: pokerCoachingRfiChart.meta || {},
-    tableSize: pokerCoachingRfiChart.meta?.tableSize || 9,
+    source: sourceChart.meta?.source || "",
+    url: sourceChart.meta?.url || "",
+    meta: sourceChart.meta || {},
+    tableSize: sourceChart.meta?.tableSize || 9,
     position: rangePosition,
     displayPosition: position,
     chartAvailable: false,

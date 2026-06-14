@@ -292,6 +292,8 @@ function closeStreet(postflop) {
 
   postflop.status = "streetComplete";
   postflop.result = "nextStreet";
+  postflop.winnerSeat = null;
+  postflop.winnerSeats = [];
   postflop.currentSeat = null;
   postflop.actionLog.push(logEntry({
     seat: postflop.heroSeat,
@@ -311,6 +313,7 @@ function completeShowdown(postflop) {
   // hand. Folded players' chips remain in the pots but they can't win them.
   const pots = buildSidePots(postflop.contributions, postflop.folded, postflop.players);
   const shares = {};
+  const chipWinnerSeats = new Set();
 
   pots.forEach((pot) => {
     let eligible = pot.eligible.filter((seat) => solvedBySeat[seat]);
@@ -320,8 +323,12 @@ function completeShowdown(postflop) {
     const winningHands = Hand.winners(eligible.map((seat) => solvedBySeat[seat]));
     const winners = eligible.filter((seat) => winningHands.includes(solvedBySeat[seat]));
     const split = splitAmount(pot.amount, winners);
+    const isWonPot = eligible.length > 1 || pot.contributors.length > 1;
     winners.forEach((seat) => {
       shares[seat] = roundAmount((shares[seat] || 0) + (split[seat] || 0));
+      if (isWonPot) {
+        chipWinnerSeats.add(seat);
+      }
     });
   });
 
@@ -332,7 +339,7 @@ function completeShowdown(postflop) {
   // Headline winner = best hand among all live seats (always wins the main pot).
   const overallHands = Hand.winners(live.map((seat) => solvedBySeat[seat]));
   const overallWinners = live.filter((seat) => overallHands.includes(solvedBySeat[seat]));
-  const winnerSeats = Object.keys(shares).map(Number).sort((a, b) => a - b);
+  const winnerSeats = [...chipWinnerSeats].sort((a, b) => a - b);
   const description = solvedBySeat[overallWinners[0]]?.descr || "";
 
   postflop.status = "complete";
@@ -401,6 +408,7 @@ export function buildSidePots(contributions, folded, players) {
     if (amount > 0) {
       pots.push({
         amount,
+        contributors,
         eligible: contributors.filter((seat) => !folded[seat]),
       });
     }

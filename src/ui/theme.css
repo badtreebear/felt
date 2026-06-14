@@ -312,7 +312,7 @@ input:focus-visible {
   z-index: 6;
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 6px;
   width: min(58%, 560px);
   transform: translate(-50%, -50%);
   text-align: center;
@@ -446,7 +446,7 @@ input:focus-visible {
   border-radius: 999px;
   padding: 5px 12px;
   color: #fff5cf;
-  background: rgba(7, 23, 20, 0.86);
+  background: rgba(7, 23, 20, 0.97);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
   font-size: clamp(0.85rem, 1.5vw, 1rem);
   line-height: 1.25;
@@ -479,6 +479,9 @@ input:focus-visible {
   border-color: rgba(201, 162, 39, 0.84);
   background: rgba(20, 57, 46, 0.95);
   z-index: 5;
+  /* Nudge the hero box down so its badges grow toward the rail, not up into
+     the result text above it. */
+  transform: translate(-50%, calc(-50% + 16px));
 }
 
 .seat--winner {
@@ -824,6 +827,26 @@ input:focus-visible {
     rgba(201, 162, 39, 0.4) 0 4px,
     rgba(201, 162, 39, 0.12) 4px 8px
   );
+}
+
+.range-cell--call {
+  border-color: rgba(77, 181, 85, 0.78);
+  color: #f4fff2;
+  background: #21853a;
+}
+
+.range-cell--threebet-value,
+.range-cell--fourbet-value {
+  border-color: rgba(244, 93, 93, 0.86);
+  color: #fff4f2;
+  background: #c9343e;
+}
+
+.range-cell--threebet-bluff,
+.range-cell--fourbet-bluff {
+  border-color: rgba(93, 117, 244, 0.86);
+  color: #f3f5ff;
+  background: #303bc2;
 }
 
 .range-source {

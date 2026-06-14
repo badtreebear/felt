@@ -4,6 +4,7 @@ import { resolveShowdown } from "../engine/hand-eval.js";
 import { legalHeroActions } from "../engine/preflop-action.js";
 import { legalPostflopActions } from "../engine/postflop-action.js";
 import { getSeatPositions } from "../engine/positions.js";
+import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
 import { getOpeningRange } from "../data/ranges/opening-ranges.js";
 import { createCard, createCardRow } from "./cards.js";
 import { createMathsChips, shouldShowMathsPanel } from "./chips.js";
@@ -40,7 +41,7 @@ export function renderTable(container, state, actions) {
     : null;
 
   table.append(createBoard(state, showdown));
-  table.append(createSeats(state, showdown, actions));
+  table.append(createSeats(state, actions));
   shell.append(table, createHandPanel(state, showdown, actions));
   container.append(shell);
 }
@@ -91,7 +92,7 @@ function createBoard(state, showdown) {
   return board;
 }
 
-function createSeats(state, showdown, actions) {
+function createSeats(state, actions) {
   const seats = document.createElement("div");
   seats.className = "seats";
 
@@ -100,12 +101,13 @@ function createSeats(state, showdown, actions) {
   const positions = getSeatPositions({ players, buttonSeat: state.hand.buttonSeat });
   const phase = currentPhaseState(state);
   const handTerminal = isTerminalHand(state);
+  const winnerSeats = winnerSeatsForBadges(state);
   seats.dataset.players = String(players);
 
   for (let seat = 0; seat < players; seat += 1) {
     const seatElement = document.createElement("article");
     const isHero = seat === heroSeat;
-    const isWinner = showdown?.winnerSeats.includes(seat) || phaseWinners(phase).includes(seat);
+    const isWinner = winnerSeats.includes(seat);
     const isFolded = Boolean(phase?.folded?.[seat]);
     const isActing = phase?.status === "waitingHero" && phase.currentSeat === seat;
     const position = positions[seat];
@@ -358,7 +360,12 @@ function createPositionBadge({ seat, position, state, actions }) {
   wrapper.append(button);
 
   if (state.ui.openRangeSeat === seat) {
-    const range = getOpeningRange({ players: state.config.players, position });
+    const range = getRangeForSpot({
+      players: state.config.players,
+      seat,
+      position,
+      hand: state.hand,
+    });
     const heroCards = state.hand.holeCards[state.config.heroSeat] || [];
     const popover = createPopover({
       id: `range-popover-${seat}`,
@@ -431,6 +438,10 @@ function seatRects() {
 }
 
 function rangePopoverTitle(range) {
+  if (range.title) {
+    return range.title;
+  }
+
   const tableSize = Number(range.meta?.tableSize || range.tableSize);
   const tableLabel = Number.isFinite(tableSize) ? `${tableSize}-max` : "range";
   const chartLabel = range.meta?.chart?.includes("RFI") ? "RFI" : "opening";
@@ -865,13 +876,31 @@ function currentPhaseState(state) {
   return state.hand.postflop || state.hand.preflop;
 }
 
-function phaseWinners(phase) {
-  if (!phase) {
+export function winnerSeatsForBadges(state) {
+  if (!isTerminalHand(state)) {
+    return [];
+  }
+
+  const postflopWinners = phaseChipWinners(state.hand.postflop);
+
+  if (postflopWinners.length) {
+    return postflopWinners;
+  }
+
+  return phaseChipWinners(state.hand.preflop);
+}
+
+function phaseChipWinners(phase) {
+  if (!phase || phase.status !== "complete") {
     return [];
   }
 
   if (Array.isArray(phase.winnerSeats) && phase.winnerSeats.length) {
     return phase.winnerSeats;
+  }
+
+  if (phase.result !== "winner") {
+    return [];
   }
 
   return phase.winnerSeat === null || phase.winnerSeat === undefined ? [] : [phase.winnerSeat];
