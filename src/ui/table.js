@@ -138,8 +138,12 @@ function createSeats(state, actions) {
       seatElement.classList.add("seat--named");
     }
 
+    const isOut = !isHero && Boolean(phase?.out?.[seat]);
+    seatElement.classList.toggle("seat--out", isOut);
+
+    const baseName = seatPlayer ? seatPlayer.name : seatLabel(seat, heroSeat);
     const name = document.createElement("strong");
-    name.textContent = seatPlayer ? seatPlayer.name : seatLabel(seat, heroSeat);
+    name.textContent = isOut ? `${baseName} · Out` : baseName;
 
     const stack = document.createElement("span");
     stack.textContent = formatAmount(phase?.stacks?.[seat] ?? state.config.stack, state);
@@ -660,6 +664,43 @@ function createPostflopHeroActionControls(state, actions) {
       createHeroActionButton(callLabel, () => actions.heroPostflopAction("call")),
     );
     wrapper.append(heading, buttonRow);
+
+    // Raising is allowed when the hero has chips beyond a call.
+    if (legal.canRaise) {
+      const raiseTo = clampAmount(
+        state.ui.heroRaiseTo || legal.minRaiseTo,
+        legal.minRaiseTo,
+        legal.maxRaiseTo,
+      );
+      const raiseRow = document.createElement("div");
+      raiseRow.className = "hero-actions__raise";
+
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = String(legal.minRaiseTo);
+      input.max = String(legal.maxRaiseTo);
+      input.step = "0.5";
+      input.value = String(raiseTo);
+      input.setAttribute("aria-label", "Raise to amount");
+      input.addEventListener("input", (event) => {
+        actions.setHeroRaiseTo(Number(event.currentTarget.value));
+      });
+
+      raiseRow.append(
+        input,
+        createHeroActionButton(`Raise to ${formatAmount(raiseTo, state)}`, () => actions.heroPostflopAction("raise", raiseTo)),
+      );
+
+      if (legal.maxRaiseTo > raiseTo) {
+        raiseRow.append(createHeroActionButton(
+          `All in ${formatAmount(legal.maxRaiseTo, state)}`,
+          () => actions.heroPostflopAction("raise", legal.maxRaiseTo),
+        ));
+      }
+
+      wrapper.append(raiseRow);
+    }
+
     return wrapper;
   }
 

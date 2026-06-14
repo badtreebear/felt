@@ -74,7 +74,15 @@ export function renderControls(container, state, actions) {
     title: "Reset every seat to the starting stack and deal a fresh game.",
   });
 
-  controls.append(dealButton, nextButton, replayButton, newGameButton);
+  const pubGameButton = createButton({
+    label: "Pub game",
+    icon: "users",
+    onClick: actions.dealHomeGame,
+    disabled: state.roster.length === 0,
+    title: "Seat your known players and deal a hand.",
+  });
+
+  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton);
   controls.append(createCoachSettingsControl(state, actions));
   controls.append(createActionSpeedControl(state, actions));
 
@@ -205,15 +213,6 @@ function createRosterManager(state, actions) {
   }
 
   body.append(list);
-
-  const pubGame = document.createElement("button");
-  pubGame.type = "button";
-  pubGame.className = "roster-pub-game";
-  pubGame.textContent = "Deal pub game";
-  pubGame.title = "Seat your known players and deal a hand";
-  pubGame.disabled = state.roster.length === 0;
-  pubGame.addEventListener("click", () => actions.dealHomeGame());
-  body.append(pubGame);
 
   section.append(body);
   return section;

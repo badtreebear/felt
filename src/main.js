@@ -1,4 +1,4 @@
-import { createIcons, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward } from "lucide";
+import { createIcons, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Users } from "lucide";
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
 import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig } from "./coach/config.js";
 import { buildChatMessages, buildExplainMessages, buildHandReviewMessages } from "./coach/prompts.js";
@@ -687,6 +687,7 @@ subscribe("*", () => {
       Settings,
       Shuffle,
       StepForward,
+      Users,
     },
   });
 });

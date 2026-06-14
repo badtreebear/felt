@@ -715,6 +715,18 @@ input:focus-visible {
   gap: 8px;
 }
 
+.seat--out {
+  opacity: 0.5;
+}
+
+#players {
+  min-width: 52px;
+}
+
+#street {
+  min-width: 88px;
+}
+
 .seat--hero {
   border-color: rgba(201, 162, 39, 0.84);
   background: rgba(20, 57, 46, 0.95);

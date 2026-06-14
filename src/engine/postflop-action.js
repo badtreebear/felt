@@ -69,6 +69,8 @@ export function applyHeroPostflopAction(postflop, input = {}, { autoActionLimit 
     applyFold(next, seat);
   } else if (action === "bet" && callAmount <= 0) {
     applyBet(next, seat, cleanBetAmount(input.betAmount || suggestedHeroBet(next)));
+  } else if (action === "raise" && callAmount > 0) {
+    applyRaise(next, seat, cleanBetAmount(input.betAmount));
   } else if (callAmount > 0) {
     applyCall(next, seat);
   } else {
@@ -88,14 +90,23 @@ export function legalPostflopActions(postflop) {
     return { canAct: false, callAmount: 0, minBet: 0, maxBet: 0, canBet: false };
   }
 
-  const callAmount = amountToCall(postflop, postflop.heroSeat);
+  const heroSeat = postflop.heroSeat;
+  const callAmount = amountToCall(postflop, heroSeat);
+  const stack = postflop.stacks[heroSeat] || 0;
+  const heroStreet = postflop.streetContributions[heroSeat] || 0;
+  const maxRaiseTo = roundAmount(heroStreet + stack);
+  const facingBet = callAmount > 0;
 
   return {
     canAct: true,
     callAmount,
     minBet: POSTFLOP_MODEL_CONSTANTS.minBetBb,
-    maxBet: postflop.stacks[postflop.heroSeat] || 0,
-    canBet: callAmount <= 0 && (postflop.stacks[postflop.heroSeat] || 0) > 0,
+    maxBet: stack,
+    canBet: callAmount <= 0 && stack > 0,
+    facingBet,
+    canRaise: facingBet && maxRaiseTo > postflop.currentBet,
+    minRaiseTo: facingBet ? Math.min(maxRaiseTo, roundAmount(postflop.currentBet * 2)) : 0,
+    maxRaiseTo,
   };
 }
 
@@ -121,6 +132,7 @@ function createInitialPostflopState({ hand, config, previous, seatProfiles, stre
   const positions = getSeatPositions({ players, buttonSeat: hand.buttonSeat });
   const folded = { ...previous.folded };
   const allIn = { ...previous.allIn };
+  const out = { ...(previous.out || {}) };
   const stacks = { ...previous.stacks };
   const contributions = { ...previous.contributions };
   const streetContributions = Object.fromEntries(Array.from({ length: players }, (_, seat) => [seat, 0]));
@@ -147,6 +159,7 @@ function createInitialPostflopState({ hand, config, previous, seatProfiles, stre
     streetContributions,
     stacks,
     folded,
+    out,
     allIn,
     toAct: postflopOrder({ players, buttonSeat: hand.buttonSeat, folded, allIn }),
     actionLog,
@@ -282,6 +295,28 @@ function applyBet(postflop, seat, requestedAmount) {
     candidate !== seat && !postflop.folded[candidate] && !postflop.allIn[candidate]
   ));
   postflop.actionLog.push(logEntry({ seat, street: postflop.street, action: "bets", size: amount }));
+}
+
+function applyRaise(postflop, seat, requestedTo) {
+  const stack = postflop.stacks[seat] || 0;
+  const current = postflop.streetContributions[seat] || 0;
+  const maxTo = roundAmount(current + stack);
+  const minTo = Math.min(maxTo, roundAmount(postflop.currentBet * 2));
+  const target = Math.min(maxTo, Math.max(minTo, roundAmount(requestedTo) || minTo));
+
+  if (target <= postflop.currentBet) {
+    // Can't make a legal raise — just call.
+    applyCall(postflop, seat);
+    return;
+  }
+
+  putStreetAmount(postflop, seat, target);
+  postflop.currentBet = postflop.streetContributions[seat];
+  postflop.bettorSeat = seat;
+  postflop.toAct = seatsAfter(postflop, seat).filter((candidate) => (
+    candidate !== seat && !postflop.folded[candidate] && !postflop.allIn[candidate]
+  ));
+  postflop.actionLog.push(logEntry({ seat, street: postflop.street, action: "raises to", size: postflop.currentBet }));
 }
 
 function closeStreet(postflop) {

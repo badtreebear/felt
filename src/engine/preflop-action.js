@@ -112,6 +112,16 @@ function createInitialPreflopState({ hand, config, seatProfiles }) {
   const stacks = startingStacksForConfig(config, players);
   const folded = Object.fromEntries(Array.from({ length: players }, (_, seat) => [seat, false]));
   const allIn = Object.fromEntries(Array.from({ length: players }, (_, seat) => [seat, false]));
+
+  // Busted seats (no chips) sit out the hand — folded before the deal.
+  const out = {};
+  for (let seat = 0; seat < players; seat += 1) {
+    if ((stacks[seat] || 0) <= 0) {
+      folded[seat] = true;
+      out[seat] = true;
+    }
+  }
+
   const blinds = config.blinds;
 
   postBlind({ contributions, stacks, seat: sbSeat, amount: blinds.sb });
@@ -141,6 +151,7 @@ function createInitialPreflopState({ hand, config, seatProfiles }) {
     stacks,
     folded,
     allIn,
+    out,
     toAct: preflopOrder({ players, bbSeat }),
     actionLog: [...hand.actionLog],
   };
@@ -326,8 +337,9 @@ function putToAmount(preflop, seat, totalAmount) {
 }
 
 function postBlind({ contributions, stacks, seat, amount }) {
-  contributions[seat] = roundAmount(amount);
-  stacks[seat] = roundAmount(stacks[seat] - amount);
+  const posted = Math.min(roundAmount(amount), stacks[seat] || 0);
+  contributions[seat] = posted;
+  stacks[seat] = roundAmount((stacks[seat] || 0) - posted);
 }
 
 function startingStacksForConfig(config, players) {
