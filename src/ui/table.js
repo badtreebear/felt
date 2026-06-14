@@ -341,13 +341,7 @@ function formatSeatAction(entry, state) {
 function createPositionBadge({ seat, position, state, actions }) {
   const wrapper = document.createElement("span");
   wrapper.className = "position-badge-wrap";
-  wrapper.addEventListener("mouseenter", () => {
-    cancelRangeClose();
-
-    if (state.ui.openRangeSeat !== seat) {
-      actions.setOpenRangeSeat(seat);
-    }
-  });
+  // Close when the cursor leaves the whole wrapper (button + open popover).
   wrapper.addEventListener("mouseleave", () => scheduleRangeClose(actions));
 
   const button = document.createElement("button");
@@ -355,14 +349,18 @@ function createPositionBadge({ seat, position, state, actions }) {
   button.className = "position-badge";
   button.textContent = position;
   button.setAttribute("aria-expanded", String(state.ui.openRangeSeat === seat));
-  button.addEventListener("focus", () => {
+  // Open only when hovering/focusing the position button itself, so the chart
+  // doesn't pop up from stray hovers near the seat.
+  const openRange = () => {
     cancelRangeClose();
-    actions.setOpenRangeSeat(seat);
-  });
-  button.addEventListener("click", () => {
-    cancelRangeClose();
-    actions.setOpenRangeSeat(seat);
-  });
+
+    if (state.ui.openRangeSeat !== seat) {
+      actions.setOpenRangeSeat(seat);
+    }
+  };
+  button.addEventListener("mouseenter", openRange);
+  button.addEventListener("focus", openRange);
+  button.addEventListener("click", openRange);
 
   wrapper.append(button);
 

@@ -256,6 +256,11 @@ const actions = {
         draft.coach.availableModels = [];
       }
     });
+
+    // Saving configured settings should immediately try to connect.
+    if (isCoachConfigured(config)) {
+      actions.testCoachConnection();
+    }
   },
   async testCoachConnection() {
     const requestId = nextCoachRequestId();
@@ -295,7 +300,7 @@ const actions = {
       draft.coach.explain[topic] = { status: "loading", content: "", error: "" };
     });
 
-    const result = await coachChatCompletion(config, messages, { maxTokens: 150 });
+    const result = await coachChatCompletion(config, messages, { maxTokens: 320 });
 
     updateState((draft) => {
       if (requestId !== coachRequestId) {
@@ -308,7 +313,7 @@ const actions = {
         return;
       }
 
-      draft.coach.explain[topic] = { status: "done", content: result.content, error: "" };
+      draft.coach.explain[topic] = { status: "done", content: sanitizeCoachContent(result.content), error: "" };
       draft.coach.status = "reachable";
       draft.coach.lastError = "";
     });
@@ -357,7 +362,7 @@ const actions = {
         return;
       }
 
-      draft.coach.chatHistory.push({ role: "assistant", content: result.content });
+      draft.coach.chatHistory.push({ role: "assistant", content: sanitizeCoachContent(result.content) });
       draft.coach.status = "reachable";
       draft.coach.lastError = "";
     });
@@ -391,7 +396,7 @@ const actions = {
         return;
       }
 
-      draft.coach.review = { status: "done", content: result.content, error: "" };
+      draft.coach.review = { status: "done", content: sanitizeCoachContent(result.content), error: "" };
       draft.coach.status = "reachable";
       draft.coach.lastError = "";
     });
@@ -542,6 +547,28 @@ function nextCoachRequestId() {
   return coachRequestId;
 }
 
+// Belt-and-suspenders: strip any LaTeX/markdown-math the model emits despite the
+// system prompt (e.g. "$\text{K}\heartsuit\text{Q}\heartsuit$" -> "K♥Q♥").
+function sanitizeCoachContent(text) {
+  if (typeof text !== "string") {
+    return "";
+  }
+
+  return text
+    // unwrap inline math delimiters only when they wrap a backslash command,
+    // so legitimate dollar amounts like "$5" are preserved.
+    .replace(/\$([^$]*\\[^$]*)\$/g, "$1")
+    .replace(/\\(?:heartsuit|hearts|heart)\b/g, "♥")
+    .replace(/\\(?:spadesuit|spades|spade)\b/g, "♠")
+    .replace(/\\(?:diamondsuit|diamonds|diamond)\b/g, "♦")
+    .replace(/\\(?:clubsuit|clubs|club)\b/g, "♣")
+    .replace(/\\(?:text|mathrm|mathbf|mathit|mathsf)\{([^}]*)\}/g, "$1")
+    .replace(/\\[a-zA-Z]+\b/g, "")
+    .replace(/\{([^{}]*)\}/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 function sameCoachConfig(first, second) {
   return first.enabled === second.enabled
     && first.baseUrl === second.baseUrl
@@ -580,6 +607,13 @@ document.addEventListener("keydown", (event) => {
 });
 
 actions.dealNewHand();
+
+// If the coach was already enabled + configured, test the saved connection on
+// load so it shows connected without a manual click (a health check, not a
+// coaching call).
+if (isCoachConfigured(state.coach.config)) {
+  actions.testCoachConnection();
+}
 
 function renderRangeAlert(container) {
   const error = getOpeningRangeLoadError();
