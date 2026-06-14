@@ -35,6 +35,7 @@ export const state = {
     exact: false,
     requiredEquity: null,
     evCall: null,
+    verdict: null,
     simStatus: "idle",
   },
   ui: {
@@ -46,6 +47,30 @@ export const state = {
     heroRaiseTo: 2.5,
     spotMode: "dealt",
     actionDelayMs: 1000,
+  },
+  coach: {
+    config: {
+      enabled: false,
+      baseUrl: "http://localhost:4000/v1",
+      model: "",
+      apiKey: "",
+    },
+    status: "unconfigured",
+    settingsOpen: false,
+    testStatus: "idle",
+    lastError: "",
+    availableModels: [],
+    callCount: 0,
+    chatOpen: false,
+    chatInput: "",
+    chatHistory: [],
+    chatStatus: "idle",
+    explain: {},
+    review: {
+      status: "idle",
+      content: "",
+      error: "",
+    },
   },
 };
 

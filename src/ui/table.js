@@ -7,6 +7,7 @@ import { getSeatPositions } from "../engine/positions.js";
 import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
 import { getOpeningRange } from "../data/ranges/opening-ranges.js";
 import { createCard, createCardRow } from "./cards.js";
+import { createCoachPanel } from "./coach-panel.js";
 import { createMathsChips, shouldShowMathsPanel } from "./chips.js";
 import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
@@ -504,6 +505,7 @@ function createHandPanel(state, showdown, actions) {
 
   const heroControls = createHeroActionControls(state, actions);
   const completionCue = createCompletionCue(state, actions);
+  const coachPanel = createCoachPanel(state, actions, { handComplete: isTerminalHand(state) });
 
   panel.append(heading, meta);
 
@@ -513,6 +515,10 @@ function createHandPanel(state, showdown, actions) {
 
   if (completionCue) {
     panel.append(completionCue);
+  }
+
+  if (coachPanel) {
+    panel.append(coachPanel);
   }
 
   panel.append(log);

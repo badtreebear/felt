@@ -2,6 +2,7 @@ import { STREET_LABELS } from "../engine/deck.js";
 import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { STREET_ORDER } from "../state.js";
+import { createCoachSettingsControl } from "./coach-settings.js";
 
 export function renderControls(container, state, actions) {
   container.replaceChildren();
@@ -74,6 +75,7 @@ export function renderControls(container, state, actions) {
   });
 
   controls.append(dealButton, nextButton, replayButton, newGameButton);
+  controls.append(createCoachSettingsControl(state, actions));
   controls.append(createActionSpeedControl(state, actions));
 
   const revealLabel = document.createElement("label");

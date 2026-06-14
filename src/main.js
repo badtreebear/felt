@@ -1,7 +1,11 @@
-import { createIcons, RefreshCcw, RotateCcw, Shuffle, StepForward } from "lucide";
+import { createIcons, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward } from "lucide";
+import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
+import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig } from "./coach/config.js";
+import { buildChatMessages, buildExplainMessages, buildHandReviewMessages } from "./coach/prompts.js";
+import { buildCoachSnapshot } from "./coach/snapshot.js";
 import { boardForStreet, dealHoldemHand, nextStreet, STREET_LABELS } from "./engine/deck.js";
 import { getOpeningRangeLoadError } from "./data/ranges/opening-ranges.js";
-import { evCall } from "./engine/ev.js";
+import { callVerdict, evCall } from "./engine/ev.js";
 import {
   advancePreflopAction,
   applyHeroPreflopAction,
@@ -49,6 +53,10 @@ const tableRoot = document.querySelector("#table-root");
 let equityWorker = null;
 let equityRequestId = 0;
 let autoActionTimer = null;
+let coachRequestId = 0;
+
+state.coach.config = loadCoachConfig();
+state.coach.status = coachStatus(state.coach.config);
 
 const actions = {
   dealNewHand(seed, { resetStacks = false } = {}) {
@@ -79,6 +87,7 @@ const actions = {
       draft.ui.revealVillains = false;
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
+      resetCoachHandState(draft);
       applyPreflopToDraft(draft, startPreflopAction({
         hand,
         config: draft.config,
@@ -221,6 +230,172 @@ const actions = {
       draft.ui.openPopover = null;
     });
   },
+  setCoachSettingsOpen(settingsOpen) {
+    updateState((draft) => {
+      draft.coach.settingsOpen = settingsOpen;
+    });
+  },
+  setCoachConfig(values) {
+    const previousBaseUrl = state.coach.config.baseUrl;
+    const config = saveCoachConfig({
+      ...state.coach.config,
+      ...values,
+    });
+
+    updateState((draft) => {
+      draft.coach.config = config;
+      draft.coach.status = coachStatus(config);
+      draft.coach.testStatus = "idle";
+      draft.coach.lastError = "";
+
+      if (!isCoachConfigured(config)) {
+        resetCoachResponses(draft);
+      }
+
+      if (Object.hasOwn(values, "baseUrl") && config.baseUrl !== previousBaseUrl) {
+        draft.coach.availableModels = [];
+      }
+    });
+  },
+  async testCoachConnection() {
+    const requestId = nextCoachRequestId();
+    const config = { ...state.coach.config };
+
+    updateState((draft) => {
+      draft.coach.testStatus = "running";
+      draft.coach.lastError = "";
+    });
+
+    const result = await pingCoachConnection(config);
+
+    updateState((draft) => {
+      if (requestId !== coachRequestId || !sameCoachConfig(config, draft.coach.config)) {
+        return;
+      }
+
+      draft.coach.testStatus = result.ok ? "success" : "error";
+      draft.coach.status = coachStatus(config, result.ok ? "reachable" : "unreachable");
+      draft.coach.lastError = result.ok ? "" : result.error;
+      draft.coach.availableModels = Array.isArray(result.models) ? result.models : draft.coach.availableModels;
+    });
+  },
+  async requestCoachExplain(topic) {
+    if (!isCoachReachable(state.coach)) {
+      updateState((draft) => markCoachOffline(draft));
+      return;
+    }
+
+    const requestId = nextCoachRequestId();
+    const config = { ...state.coach.config };
+    const snapshot = buildCoachSnapshot(state);
+    const messages = buildExplainMessages({ snapshot, topic });
+
+    updateState((draft) => {
+      draft.coach.callCount += 1;
+      draft.coach.explain[topic] = { status: "loading", content: "", error: "" };
+    });
+
+    const result = await coachChatCompletion(config, messages, { maxTokens: 150 });
+
+    updateState((draft) => {
+      if (requestId !== coachRequestId) {
+        return;
+      }
+
+      if (!result.ok) {
+        draft.coach.explain[topic] = { status: "idle", content: "", error: "" };
+        markCoachOffline(draft, result.error);
+        return;
+      }
+
+      draft.coach.explain[topic] = { status: "done", content: result.content, error: "" };
+      draft.coach.status = "reachable";
+      draft.coach.lastError = "";
+    });
+  },
+  setCoachChatOpen(chatOpen) {
+    updateState((draft) => {
+      draft.coach.chatOpen = chatOpen;
+    });
+  },
+  async sendCoachChat(chatInput = "") {
+    const input = String(chatInput || state.coach.chatInput || "").trim();
+
+    if (!input) {
+      return;
+    }
+
+    if (!isCoachReachable(state.coach)) {
+      updateState((draft) => markCoachOffline(draft));
+      return;
+    }
+
+    const requestId = nextCoachRequestId();
+    const config = { ...state.coach.config };
+    const history = [...state.coach.chatHistory];
+    const snapshot = buildCoachSnapshot(state);
+    const messages = buildChatMessages({ snapshot, history, input });
+
+    updateState((draft) => {
+      draft.coach.callCount += 1;
+      draft.coach.chatInput = "";
+      draft.coach.chatStatus = "loading";
+      draft.coach.chatHistory.push({ role: "user", content: input });
+    });
+
+    const result = await coachChatCompletion(config, messages, { maxTokens: 220 });
+
+    updateState((draft) => {
+      if (requestId !== coachRequestId) {
+        return;
+      }
+
+      draft.coach.chatStatus = "idle";
+
+      if (!result.ok) {
+        markCoachOffline(draft, result.error);
+        return;
+      }
+
+      draft.coach.chatHistory.push({ role: "assistant", content: result.content });
+      draft.coach.status = "reachable";
+      draft.coach.lastError = "";
+    });
+  },
+  async requestCoachReview() {
+    if (!isCoachReachable(state.coach)) {
+      updateState((draft) => markCoachOffline(draft));
+      return;
+    }
+
+    const requestId = nextCoachRequestId();
+    const config = { ...state.coach.config };
+    const snapshot = buildCoachSnapshot(state);
+    const messages = buildHandReviewMessages({ snapshot });
+
+    updateState((draft) => {
+      draft.coach.callCount += 1;
+      draft.coach.review = { status: "loading", content: "", error: "" };
+    });
+
+    const result = await coachChatCompletion(config, messages, { maxTokens: 450 });
+
+    updateState((draft) => {
+      if (requestId !== coachRequestId) {
+        return;
+      }
+
+      if (!result.ok) {
+        draft.coach.review = { status: "idle", content: "", error: "" };
+        markCoachOffline(draft, result.error);
+        return;
+      }
+
+      draft.coach.review = { status: "done", content: result.content, error: "" };
+      draft.coach.status = "reachable";
+      draft.coach.lastError = "";
+    });
+  },
   setSeatProfile(seat, profileId) {
     clearAutoActionTimer();
     const seed = state.hand.seed;
@@ -338,6 +513,42 @@ function clearAutoActionTimer() {
   }
 }
 
+function resetCoachHandState(draft) {
+  draft.coach.callCount = 0;
+  draft.coach.chatInput = "";
+  draft.coach.chatHistory = [];
+  draft.coach.chatStatus = "idle";
+  resetCoachResponses(draft);
+}
+
+function resetCoachResponses(draft) {
+  draft.coach.explain = {};
+  draft.coach.review = {
+    status: "idle",
+    content: "",
+    error: "",
+  };
+}
+
+function markCoachOffline(draft, error = "Coach offline - trainer fully functional.") {
+  draft.coach.status = coachStatus(draft.coach.config, "unreachable");
+  draft.coach.testStatus = "error";
+  draft.coach.lastError = error;
+  draft.coach.chatStatus = "idle";
+}
+
+function nextCoachRequestId() {
+  coachRequestId += 1;
+  return coachRequestId;
+}
+
+function sameCoachConfig(first, second) {
+  return first.enabled === second.enabled
+    && first.baseUrl === second.baseUrl
+    && first.model === second.model
+    && first.apiKey === second.apiKey;
+}
+
 function currentAutoPhase(currentState) {
   const phase = currentState.hand.postflop?.status === "active"
     ? currentState.hand.postflop
@@ -354,6 +565,7 @@ subscribe("*", () => {
     icons: {
       RefreshCcw,
       RotateCcw,
+      Settings,
       Shuffle,
       StepForward,
     },
@@ -515,11 +727,19 @@ function refreshMaths(draft, { keepEquity }) {
     draft.maths.tieRate = null;
     draft.maths.iterations = 0;
     draft.maths.exact = false;
+    draft.maths.verdict = null;
   }
 
   draft.maths.evCall = draft.maths.heroEquity === null
     ? null
     : evCall({
+      equity: draft.maths.heroEquity,
+      pot: draft.hand.pot,
+      toCall: draft.hand.toCall,
+    });
+  draft.maths.verdict = draft.maths.heroEquity === null || draft.hand.toCall <= 0
+    ? null
+    : callVerdict({
       equity: draft.maths.heroEquity,
       pot: draft.hand.pot,
       toCall: draft.hand.toCall,

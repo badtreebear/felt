@@ -1,5 +1,6 @@
 import { callVerdict } from "../engine/ev.js";
 import { finalPotAfterCall } from "../engine/potodds.js";
+import { isCoachConfigured, isCoachReachable } from "../coach/config.js";
 import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
 
@@ -8,6 +9,8 @@ const CHIP_CONFIG = [
   { id: "potOdds", label: "Pot odds" },
   { id: "ev", label: "EV" },
 ];
+const MATHS_POPOVER_CLOSE_DELAY_MS = 120;
+let mathsPopoverCloseTimer = null;
 
 export function createMathsChips(state, actions) {
   if (!shouldShowMathsPanel(state)) {
@@ -17,6 +20,14 @@ export function createMathsChips(state, actions) {
   const tray = document.createElement("div");
   tray.className = "maths-chip-tray";
   tray.setAttribute("aria-label", "Maths layer");
+  tray.addEventListener("mouseenter", cancelMathsPopoverClose);
+  tray.addEventListener("mouseleave", () => scheduleMathsPopoverClose(actions));
+  tray.addEventListener("focusin", cancelMathsPopoverClose);
+  tray.addEventListener("focusout", (event) => {
+    if (!tray.contains(event.relatedTarget)) {
+      scheduleMathsPopoverClose(actions);
+    }
+  });
 
   CHIP_CONFIG.forEach((chip) => {
     const button = document.createElement("button");
@@ -35,11 +46,29 @@ export function createMathsChips(state, actions) {
       id: "maths-popover",
       title: popoverTitle(state.ui.openPopover),
       onClose: () => actions.setOpenPopover(null),
-      children: popoverBody(state.ui.openPopover, state),
+      children: popoverBody(state.ui.openPopover, state, actions),
     }));
   }
 
   return tray;
+}
+
+function cancelMathsPopoverClose() {
+  if (mathsPopoverCloseTimer) {
+    clearTimeout(mathsPopoverCloseTimer);
+    mathsPopoverCloseTimer = null;
+  }
+}
+
+function scheduleMathsPopoverClose(actions) {
+  cancelMathsPopoverClose();
+  mathsPopoverCloseTimer = setTimeout(() => {
+    mathsPopoverCloseTimer = null;
+
+    if (!document.querySelector(".maths-chip-tray:hover")) {
+      actions.setOpenPopover(null);
+    }
+  }, MATHS_POPOVER_CLOSE_DELAY_MS);
 }
 
 export function shouldShowMathsPanel(state) {
@@ -78,7 +107,18 @@ function popoverTitle(id) {
   return "EV";
 }
 
-function popoverBody(id, state) {
+function popoverBody(id, state, actions) {
+  const body = deterministicBody(id, state);
+  const coach = coachExplainBody(id, state, actions);
+
+  if (coach) {
+    body.append(coach);
+  }
+
+  return body;
+}
+
+function deterministicBody(id, state) {
   if (id === "equity") {
     return equityBody(state);
   }
@@ -88,6 +128,37 @@ function popoverBody(id, state) {
   }
 
   return evBody(state);
+}
+
+function coachExplainBody(id, state, actions) {
+  if (!isCoachConfigured(state.coach.config)) {
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "coach-explain";
+
+  if (!isCoachReachable(state.coach)) {
+    wrapper.append(paragraph("Coach offline - trainer fully functional."));
+    return wrapper;
+  }
+
+  const explain = state.coach.explain?.[id] || { status: "idle", content: "" };
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "coach-explain__button";
+  button.disabled = explain.status === "loading";
+  button.textContent = explain.status === "loading" ? "Coach thinking..." : "Ask coach";
+  button.addEventListener("click", () => actions.requestCoachExplain(id));
+  wrapper.append(button);
+
+  if (explain.content) {
+    const response = paragraph(explain.content);
+    response.className = "coach-response";
+    wrapper.append(response);
+  }
+
+  return wrapper;
 }
 
 function equityBody(state) {
