@@ -64,7 +64,7 @@ function createBoard(state, showdown) {
 
   const street = document.createElement("div");
   street.className = "street-badge";
-  street.textContent = STREET_LABELS[state.hand.street];
+  street.textContent = state.ui.awaitingStart ? "Set up" : STREET_LABELS[state.hand.street];
 
   const cards = document.createElement("div");
   cards.className = "board-cards";
@@ -500,6 +500,24 @@ function createHandPanel(state, showdown, actions) {
   const panel = document.createElement("aside");
   panel.className = "hand-panel";
   panel.setAttribute("aria-label", "Current hand details");
+
+  if (state.ui.awaitingStart) {
+    const heading = document.createElement("h2");
+    heading.textContent = "Set up the table";
+
+    const setup = document.createElement("div");
+    setup.className = "setup-panel";
+
+    const text = document.createElement("p");
+    text.textContent = "Assign players to the seats, then start the game.";
+
+    const start = createHeroActionButton("Start game", () => actions.startGame());
+    start.classList.add("setup-start");
+
+    setup.append(text, start);
+    panel.append(heading, setup);
+    return panel;
+  }
 
   const heading = document.createElement("h2");
   heading.textContent = "Hand flow";

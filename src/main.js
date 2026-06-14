@@ -101,6 +101,7 @@ const actions = {
       draft.hand = hand;
       draft.hand.startingStacks = { ...startingStacks };
       draft.hand.postflop = null;
+      draft.ui.awaitingStart = false;
       draft.ui.revealVillains = false;
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
@@ -129,7 +130,36 @@ const actions = {
     }
   },
   newGame() {
-    // Reset every seat to the configured starting stack and deal fresh.
+    // Reset stacks and drop into a setup state (no hand dealt yet) so the table
+    // can be arranged via the seat pickers; "Start" deals the first hand.
+    clearAutoActionTimer();
+    const players = state.config.players;
+    const heroSeat = Math.floor(players / 2);
+
+    updateState((draft) => {
+      draft.config.heroSeat = heroSeat;
+      draft.config.tableStacks = defaultStacksForPlayers(players, draft.config.stack);
+      draft.hand.preflop = null;
+      draft.hand.postflop = null;
+      draft.hand.holeCards = {};
+      draft.hand.board = [];
+      draft.hand.boardRunout = [];
+      draft.hand.burnCards = [];
+      draft.hand.street = "preflop";
+      draft.hand.pot = 0;
+      draft.hand.toCall = 0;
+      draft.hand.actionLog = [];
+      draft.hand.seed = "";
+      draft.hand.startingStacks = {};
+      draft.ui.awaitingStart = true;
+      draft.ui.openPopover = null;
+      draft.ui.openRangeSeat = null;
+      draft.ui.revealVillains = false;
+      resetCoachHandState(draft);
+    });
+  },
+  startGame() {
+    // Begin the game from the setup state with the arranged seating.
     actions.dealNewHand(undefined, { resetStacks: true });
   },
   rebuyHero() {

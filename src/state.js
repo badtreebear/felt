@@ -53,6 +53,7 @@ export const state = {
     actionDelayMs: 1000,
     rosterOpen: false,
     rosterImportStatus: null,
+    awaitingStart: false,
   },
   coach: {
     config: {

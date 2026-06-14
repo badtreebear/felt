@@ -540,7 +540,7 @@ function createPhaseFourSettings(state, actions) {
 
 function seatAssignmentOptions(state) {
   return [
-    { value: "default", label: "Random / Standard" },
+    { value: "default", label: "Default" },
     ...getProfileOptions().map((profile) => ({
       value: `profile:${profile.id}`,
       label: profile.label,
