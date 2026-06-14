@@ -1,6 +1,7 @@
 import { STREET_LABELS } from "../engine/deck.js";
 import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
+import { baseProfilePercent } from "../roster/weights.js";
 import { STREET_ORDER } from "../state.js";
 import { createCoachSettingsControl } from "./coach-settings.js";
 
@@ -111,11 +112,12 @@ export function renderControls(container, state, actions) {
   container.append(createRosterManager(state, actions));
 }
 
-function buildTypeSelect(value) {
+function buildTypeSelect(value, { excludeIds = [] } = {}) {
   const select = document.createElement("select");
   select.setAttribute("aria-label", "Player type");
+  const excluded = new Set(excludeIds.filter(Boolean));
 
-  getProfileOptions().forEach((option) => {
+  getProfileOptions().filter((option) => !excluded.has(option.id)).forEach((option) => {
     const element = document.createElement("option");
     element.value = option.id;
     element.textContent = option.label;
@@ -173,6 +175,7 @@ function createRosterManager(state, actions) {
 
   form.append(nameInput, typeSelect, addButton);
   body.append(form);
+  body.append(createRosterFileControls(state, actions));
 
   const list = document.createElement("ul");
   list.className = "roster-list";
@@ -207,7 +210,7 @@ function createRosterManager(state, actions) {
       remove.title = `Remove ${player.name}`;
       remove.addEventListener("click", () => actions.rosterRemove(player.id));
 
-      item.append(dot, label, select, remove);
+      item.append(dot, label, select, remove, createWeightEditor(player, actions));
       list.append(item);
     });
   }
@@ -216,6 +219,185 @@ function createRosterManager(state, actions) {
 
   section.append(body);
   return section;
+}
+
+function createRosterFileControls(state, actions) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "roster-file-tools";
+
+  const exportButton = document.createElement("button");
+  exportButton.type = "button";
+  exportButton.className = "roster-tool-button";
+  exportButton.innerHTML = '<i data-lucide="download" aria-hidden="true"></i><span>Export JSON</span>';
+  exportButton.disabled = state.roster.length === 0;
+  exportButton.addEventListener("click", () => {
+    const roster = actions.rosterExport ? actions.rosterExport() : state.roster;
+    downloadRosterJson(roster);
+
+    if (actions.setRosterImportStatus) {
+      actions.setRosterImportStatus({
+        kind: "success",
+        message: `Exported ${roster.length} player${roster.length === 1 ? "" : "s"}.`,
+      });
+    }
+  });
+
+  const importInput = document.createElement("input");
+  importInput.type = "file";
+  importInput.accept = ".json,application/json";
+  importInput.className = "roster-import-input";
+  importInput.setAttribute("aria-label", "Import roster JSON");
+
+  const importButton = document.createElement("button");
+  importButton.type = "button";
+  importButton.className = "roster-tool-button";
+  importButton.innerHTML = '<i data-lucide="upload" aria-hidden="true"></i><span>Import JSON</span>';
+  importButton.addEventListener("click", () => importInput.click());
+
+  importInput.addEventListener("change", async (event) => {
+    const file = event.currentTarget.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(await file.text());
+      actions.rosterImport(parsed);
+    } catch {
+      actions.setRosterImportStatus?.({
+        kind: "error",
+        message: "Import failed. Choose a valid roster JSON file.",
+      });
+    } finally {
+      event.currentTarget.value = "";
+    }
+  });
+
+  wrapper.append(exportButton, importButton, importInput);
+
+  if (state.ui.rosterImportStatus?.message) {
+    const status = document.createElement("p");
+    status.className = "roster-file-status";
+    status.classList.toggle("roster-file-status--error", state.ui.rosterImportStatus.kind === "error");
+    status.textContent = state.ui.rosterImportStatus.message;
+    wrapper.append(status);
+  }
+
+  return wrapper;
+}
+
+function downloadRosterJson(roster) {
+  const blob = new Blob([`${JSON.stringify(roster, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "felt-roster.json";
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function createWeightEditor(player, actions) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "roster-blend";
+
+  const weights = Array.isArray(player.weights) ? player.weights : [];
+  const remaining = baseProfilePercent(player);
+  const baseShare = document.createElement("span");
+  baseShare.className = "roster-blend__base";
+  baseShare.textContent = `${profileLabel(player.profile)} ${formatWeightPercent(remaining)}`;
+  wrapper.append(baseShare);
+
+  const splashes = document.createElement("div");
+  splashes.className = "roster-splashes";
+
+  weights.forEach((weight, index) => {
+    const chip = document.createElement("span");
+    chip.className = "roster-splash";
+
+    const text = document.createElement("span");
+    text.textContent = `${profileLabel(weight.profile)} ${formatWeightPercent(weight.percent)}`;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "x";
+    remove.title = `Remove ${profileLabel(weight.profile)} splash`;
+    remove.setAttribute("aria-label", remove.title);
+    remove.addEventListener("click", () => {
+      actions.rosterSetWeights(player.id, weights.filter((_, weightIndex) => weightIndex !== index));
+    });
+
+    chip.append(text, remove);
+    splashes.append(chip);
+  });
+
+  wrapper.append(splashes);
+
+  const add = document.createElement("div");
+  add.className = "roster-splash-add";
+
+  const select = buildTypeSelect(undefined, { excludeIds: [player.profile] });
+  select.className = "roster-splash-type";
+  select.title = "Splash type";
+
+  const percent = document.createElement("input");
+  percent.type = "number";
+  percent.min = "1";
+  percent.max = String(Math.max(0, remaining));
+  percent.step = "1";
+  percent.value = String(Math.min(5, Math.max(0, remaining)));
+  percent.setAttribute("aria-label", "Splash percent");
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.textContent = "+";
+  addButton.title = "Add splash";
+  addButton.setAttribute("aria-label", "Add weighted splash");
+  addButton.disabled = remaining <= 0 || select.options.length === 0;
+  addButton.addEventListener("click", () => {
+    const clampedPercent = Math.min(cleanWeightPercent(percent.value), remaining);
+
+    if (!select.value || clampedPercent <= 0) {
+      return;
+    }
+
+    actions.rosterSetWeights(player.id, [
+      ...weights,
+      { profile: select.value, percent: clampedPercent },
+    ]);
+  });
+
+  add.append(select, percent, addButton);
+  wrapper.append(add);
+  return wrapper;
+}
+
+function profileLabel(profileId) {
+  return getProfileOptions().find((profile) => profile.id === profileId)?.label || profileId || "Standard";
+}
+
+function formatWeightPercent(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "0%";
+  }
+
+  return `${Number.isInteger(number) ? number : number.toFixed(1).replace(/\.0$/, "")}%`;
+}
+
+function cleanWeightPercent(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number <= 0) {
+    return 0;
+  }
+
+  return Math.round(Math.min(number, 100) * 100) / 100;
 }
 
 function createActionSpeedControl(state, actions) {
@@ -336,10 +518,7 @@ function createPhaseFourSettings(state, actions) {
   const positions = state.hand.buttonSeat !== undefined
     ? getSeatPositions({ players: state.config.players, buttonSeat: state.hand.buttonSeat })
     : {};
-  const profileOptions = getProfileOptions().map((profile) => ({
-    value: profile.id,
-    label: profile.label,
-  }));
+  const seatOptions = seatAssignmentOptions(state);
 
   for (let seat = 0; seat < state.config.players; seat += 1) {
     if (seat === state.config.heroSeat) {
@@ -349,14 +528,49 @@ function createPhaseFourSettings(state, actions) {
     profileGrid.append(createSelectControl({
       id: `profile-seat-${seat}`,
       label: `Seat ${seat + 1} ${positions[seat] || ""}`.trim(),
-      value: state.config.seatProfiles[String(seat)] || "standard",
-      options: profileOptions,
-      onChange: (value) => actions.setSeatProfile(seat, value),
+      value: seatAssignmentValue(state, seat),
+      options: seatOptions,
+      onChange: (value) => actions.setSeatAssignment(seat, value),
     }));
   }
 
   settings.append(displayToggle, profileVisibility, profileGrid);
   return settings;
+}
+
+function seatAssignmentOptions(state) {
+  return [
+    { value: "default", label: "Random / Standard" },
+    ...getProfileOptions().map((profile) => ({
+      value: `profile:${profile.id}`,
+      label: profile.label,
+    })),
+    ...state.roster.map((player) => ({
+      value: `player:${player.id}`,
+      label: player.name,
+    })),
+  ];
+}
+
+function seatAssignmentValue(state, seat) {
+  const key = String(seat);
+  const assigned = state.config.seatAssignments?.[key];
+  const playerId = state.config.seatPlayers?.[key] ?? state.config.seatPlayers?.[seat];
+
+  if (playerId && state.roster.some((player) => player.id === playerId)) {
+    return `player:${playerId}`;
+  }
+
+  if (assigned?.startsWith("profile:")) {
+    return assigned;
+  }
+
+  if (assigned === "default") {
+    return "default";
+  }
+
+  const profileId = state.config.seatProfiles?.[key];
+  return profileId && profileId !== "standard" ? `profile:${profileId}` : "default";
 }
 
 function createModeControl(state, actions) {

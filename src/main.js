@@ -1,4 +1,4 @@
-import { createIcons, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Users } from "lucide";
+import { createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Upload, Users } from "lucide";
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
 import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig } from "./coach/config.js";
 import { buildChatMessages, buildExplainMessages, buildHandReviewMessages } from "./coach/prompts.js";
@@ -20,7 +20,9 @@ import {
 } from "./engine/postflop-action.js";
 import { requiredEquity } from "./engine/potodds.js";
 import { state, subscribe, updateState } from "./state.js";
-import { createPlayer, loadRoster, saveRoster } from "./roster/store.js";
+import { applySeatAssignment } from "./roster/seat-assignments.js";
+import { createPlayer, loadRoster, mergeImportedRoster, normalizePlayer, saveRoster } from "./roster/store.js";
+import { resolveSeatProfilesForHand } from "./roster/weights.js";
 import { renderControls } from "./ui/controls.js";
 import { renderTable } from "./ui/table.js";
 import "./ui/theme.css";
@@ -89,6 +91,13 @@ const actions = {
       draft.config.heroSeat = heroSeat;
       draft.config.tableStacks = startingStacks;
       ensureSeatProfiles(draft.config);
+      const resolvedSeats = resolveSeatProfilesForHand({
+        config: draft.config,
+        roster: draft.roster,
+        seed: hand.seed,
+      });
+      draft.config.seatProfiles = resolvedSeats.seatProfiles;
+      draft.config.seatModes = resolvedSeats.seatModes;
       draft.hand = hand;
       draft.hand.startingStacks = { ...startingStacks };
       draft.hand.postflop = null;
@@ -137,6 +146,7 @@ const actions = {
 
     updateState((draft) => {
       draft.roster = saveRoster([...draft.roster, player]);
+      draft.ui.rosterImportStatus = null;
     });
   },
   rosterRemove(id) {
@@ -144,12 +154,21 @@ const actions = {
       draft.roster = saveRoster(draft.roster.filter((player) => player.id !== id));
 
       const seatPlayers = { ...draft.config.seatPlayers };
+      const seatModes = { ...draft.config.seatModes };
+      const seatProfiles = { ...draft.config.seatProfiles };
+      const seatAssignments = { ...draft.config.seatAssignments };
       for (const seat of Object.keys(seatPlayers)) {
         if (seatPlayers[seat] === id) {
           delete seatPlayers[seat];
+          delete seatModes[seat];
+          delete seatProfiles[seat];
+          delete seatAssignments[seat];
         }
       }
       draft.config.seatPlayers = seatPlayers;
+      draft.config.seatModes = seatModes;
+      draft.config.seatProfiles = seatProfiles;
+      draft.config.seatAssignments = seatAssignments;
     });
   },
   setRosterOpen(open) {
@@ -168,6 +187,35 @@ const actions = {
       )));
     });
   },
+  rosterSetWeights(id, weights) {
+    updateState((draft) => {
+      draft.roster = saveRoster(draft.roster.map((player) => (
+        player.id === id ? { ...player, weights } : player
+      )));
+    });
+  },
+  rosterExport() {
+    return state.roster.map((player) => normalizePlayer(player)).filter(Boolean);
+  },
+  rosterImport(payload) {
+    let result = { added: 0, skipped: 0, roster: state.roster };
+
+    updateState((draft) => {
+      result = mergeImportedRoster(draft.roster, payload);
+      draft.roster = saveRoster(result.roster);
+      draft.ui.rosterImportStatus = {
+        kind: result.added > 0 ? "success" : "neutral",
+        message: `Imported ${result.added} player${result.added === 1 ? "" : "s"}${result.skipped ? `, skipped ${result.skipped}` : ""}.`,
+      };
+    });
+
+    return result;
+  },
+  setRosterImportStatus(rosterImportStatus) {
+    updateState((draft) => {
+      draft.ui.rosterImportStatus = rosterImportStatus;
+    });
+  },
   dealHomeGame() {
     // Seat the known-player roster into the villain seats (round-robin if there
     // are fewer players than seats) and deal — "the pub game".
@@ -180,6 +228,7 @@ const actions = {
     const shuffled = [...state.roster].sort(() => Math.random() - 0.5);
     const seatPlayers = {};
     const seatProfiles = { ...state.config.seatProfiles };
+    const seatAssignments = {};
     let index = 0;
 
     for (let seat = 0; seat < players; seat += 1) {
@@ -193,16 +242,20 @@ const actions = {
         // Seat the next known player.
         seatPlayers[seat] = player.id;
         seatProfiles[String(seat)] = player.profile;
+        seatAssignments[String(seat)] = `player:${player.id}`;
         index += 1;
       } else {
         // Not enough known players — fill the rest with a standard player.
         seatProfiles[String(seat)] = "standard";
+        seatAssignments[String(seat)] = "profile:standard";
       }
     }
 
     updateState((draft) => {
       draft.config.seatPlayers = seatPlayers;
       draft.config.seatProfiles = seatProfiles;
+      draft.config.seatModes = {};
+      draft.config.seatAssignments = seatAssignments;
     });
 
     actions.dealNewHand();
@@ -494,11 +547,23 @@ const actions = {
     });
   },
   setSeatProfile(seat, profileId) {
+    actions.setSeatAssignment(seat, `profile:${profileId}`);
+  },
+  setSeatAssignment(seat, assignment) {
     clearAutoActionTimer();
     const seed = state.hand.seed;
 
     updateState((draft) => {
-      draft.config.seatProfiles[String(seat)] = profileId;
+      const seats = applySeatAssignment(draft.config, draft.roster, seat, assignment);
+
+      if (!seats) {
+        return;
+      }
+
+      draft.config.seatPlayers = seats.seatPlayers;
+      draft.config.seatProfiles = seats.seatProfiles;
+      draft.config.seatModes = seats.seatModes;
+      draft.config.seatAssignments = seats.seatAssignments;
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
     });
@@ -687,6 +752,8 @@ subscribe("*", () => {
       Settings,
       Shuffle,
       StepForward,
+      Download,
+      Upload,
       Users,
     },
   });
@@ -907,6 +974,8 @@ function applyPostflopToDraft(draft, postflop) {
 
 function ensureSeatProfiles(config) {
   config.seatProfiles = config.seatProfiles || {};
+  config.seatModes = config.seatModes || {};
+  config.seatAssignments = config.seatAssignments || {};
   config.tableStacks = normalizeStacksForPlayers(config.tableStacks, config.players, config.stack);
 
   for (let seat = 0; seat < config.players; seat += 1) {

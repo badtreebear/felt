@@ -599,7 +599,8 @@ input:focus-visible {
 }
 
 .roster-add button,
-.roster-pub-game {
+.roster-pub-game,
+.roster-tool-button {
   min-height: 36px;
   border: 1px solid rgba(201, 162, 39, 0.42);
   border-radius: 6px;
@@ -608,6 +609,50 @@ input:focus-visible {
   background: rgba(201, 162, 39, 0.16);
   cursor: pointer;
   font-weight: 700;
+}
+
+.roster-file-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.roster-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.roster-tool-button svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.5;
+}
+
+.roster-tool-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.roster-import-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.roster-file-status {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.roster-file-status--error {
+  color: #ffd1cc;
 }
 
 .roster-pub-game {
@@ -636,9 +681,10 @@ input:focus-visible {
 }
 
 .roster-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 12px minmax(90px, 1fr) minmax(116px, 160px) 28px;
   align-items: center;
-  gap: 8px;
+  gap: 7px 8px;
 }
 
 .roster-dot {
@@ -649,9 +695,13 @@ input:focus-visible {
 }
 
 .roster-name {
+  min-width: 0;
+  overflow: hidden;
   flex: 1;
   color: #f7f4ed;
   font-size: 0.84rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .roster-remove {
@@ -691,6 +741,95 @@ input:focus-visible {
   color: #f7f4ed;
   background: #102c27;
   font-size: 0.76rem;
+}
+
+.roster-blend {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.roster-blend__base,
+.roster-splash {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.roster-blend__base {
+  border: 1px solid rgba(201, 162, 39, 0.34);
+  color: #fff5cf;
+  background: rgba(201, 162, 39, 0.1);
+}
+
+.roster-splashes {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.roster-splash {
+  gap: 6px;
+  border: 1px solid rgba(142, 211, 134, 0.36);
+  color: #d6ffd1;
+  background: rgba(14, 58, 47, 0.62);
+}
+
+.roster-splash button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  color: #10241e;
+  background: #8ed386;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.roster-splash-add {
+  display: grid;
+  grid-template-columns: minmax(92px, 124px) 58px 28px;
+  gap: 5px;
+  align-items: center;
+}
+
+.roster-splash-add select,
+.roster-splash-add input {
+  min-width: 0;
+  min-height: 28px;
+  border: 1px solid rgba(247, 244, 237, 0.2);
+  border-radius: 6px;
+  padding: 0 6px;
+  color: #f7f4ed;
+  background: #102c27;
+  font-size: 0.72rem;
+}
+
+.roster-splash-add button {
+  min-height: 28px;
+  border: 1px solid rgba(201, 162, 39, 0.42);
+  border-radius: 6px;
+  color: #fff9e6;
+  background: rgba(201, 162, 39, 0.16);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.roster-splash-add button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
 }
 
 .bust-banner {
@@ -750,7 +889,8 @@ input:focus-visible {
 .seat--folded > .seat__title,
 .seat--folded .dealer-button,
 .seat--folded .commit-badge,
-.seat--folded .profile-badge {
+.seat--folded .profile-badge,
+.seat--folded .mode-badge {
   opacity: 0.62;
 }
 
@@ -867,7 +1007,8 @@ input:focus-visible {
 
 .action-badge,
 .commit-badge,
-.profile-badge {
+.profile-badge,
+.mode-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -911,6 +1052,12 @@ input:focus-visible {
 .profile-badge {
   color: #10241e;
   background: #8ed386;
+}
+
+.mode-badge {
+  border: 1px solid rgba(201, 162, 39, 0.54);
+  color: #fff5cf;
+  background: rgba(201, 162, 39, 0.18);
 }
 
 .position-badge-wrap {

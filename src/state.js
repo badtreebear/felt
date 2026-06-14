@@ -10,6 +10,8 @@ export const state = {
     tableStacks: {},
     seatProfiles: {},
     seatPlayers: {},
+    seatModes: {},
+    seatAssignments: {},
   },
   roster: [],
   hand: {
@@ -50,6 +52,7 @@ export const state = {
     spotMode: "dealt",
     actionDelayMs: 1000,
     rosterOpen: false,
+    rosterImportStatus: null,
   },
   coach: {
     config: {

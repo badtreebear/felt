@@ -4,6 +4,7 @@ import { resolveShowdown } from "../engine/hand-eval.js";
 import { legalHeroActions } from "../engine/preflop-action.js";
 import { legalPostflopActions } from "../engine/postflop-action.js";
 import { getSeatPositions } from "../engine/positions.js";
+import { hasWeightedProfiles } from "../roster/weights.js";
 import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
 import { getOpeningRange } from "../data/ranges/opening-ranges.js";
 import { createCard, createCardRow } from "./cards.js";
@@ -193,10 +194,16 @@ function createSeats(state, actions) {
       badges.append(commit);
     }
 
-    const profileBadge = createProfileBadge({ seat, isHero, state });
+    const profileBadge = createProfileBadge({ seat, isHero, state, seatPlayer });
 
     if (profileBadge) {
       badges.append(profileBadge);
+    }
+
+    const modeBadge = createResolvedModeBadge({ seat, isHero, state, seatPlayer });
+
+    if (modeBadge) {
+      badges.append(modeBadge);
     }
 
     badges.append(createPositionBadge({ seat, position, state, actions }));
@@ -220,19 +227,40 @@ function createSeats(state, actions) {
   return seats;
 }
 
-function createProfileBadge({ seat, isHero, state }) {
+function createProfileBadge({ seat, isHero, state, seatPlayer }) {
   const showProfile = !isHero && (state.ui.showProfiles || isTerminalHand(state));
 
   if (!showProfile) {
     return null;
   }
 
-  const profileId = state.config.seatProfiles?.[String(seat)] || "standard";
+  const profileId = hasWeightedProfiles(seatPlayer)
+    ? seatPlayer.profile
+    : state.config.seatProfiles?.[String(seat)] || "standard";
   const profile = PLAYER_PROFILES[profileId] || PLAYER_PROFILES.standard;
   const badge = document.createElement("span");
   badge.className = "profile-badge";
   badge.textContent = profile.label || profileId;
   badge.title = `Range ${profile.rangeWidth} / aggression ${profile.aggression} / sizing ${profile.sizing}`;
+  return badge;
+}
+
+function createResolvedModeBadge({ seat, isHero, state, seatPlayer }) {
+  if (isHero || state.ui.spotMode !== "manual" || !hasWeightedProfiles(seatPlayer)) {
+    return null;
+  }
+
+  const profileId = state.config.seatModes?.[String(seat)];
+
+  if (!profileId) {
+    return null;
+  }
+
+  const profile = PLAYER_PROFILES[profileId] || PLAYER_PROFILES.standard;
+  const badge = document.createElement("span");
+  badge.className = "mode-badge";
+  badge.textContent = `${profile.label || profileId} this hand`;
+  badge.title = "Resolved player type for this hand.";
   return badge;
 }
 
