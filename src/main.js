@@ -20,6 +20,7 @@ import {
 } from "./engine/postflop-action.js";
 import { requiredEquity } from "./engine/potodds.js";
 import { state, subscribe, updateState } from "./state.js";
+import { createPlayer, loadRoster, saveRoster } from "./roster/store.js";
 import { renderControls } from "./ui/controls.js";
 import { renderTable } from "./ui/table.js";
 import "./ui/theme.css";
@@ -55,17 +56,24 @@ let equityRequestId = 0;
 let autoActionTimer = null;
 let coachRequestId = 0;
 
+state.roster = loadRoster();
 state.coach.config = loadCoachConfig();
 state.coach.status = coachStatus(state.coach.config);
 
 const actions = {
-  dealNewHand(seed, { resetStacks = false } = {}) {
+  dealNewHand(seed, { resetStacks = false, stackOverrides = null } = {}) {
     clearAutoActionTimer();
     const players = state.config.players;
     const heroSeat = Math.floor(players / 2);
     const startingStacks = resetStacks
       ? defaultStacksForPlayers(players, state.config.stack)
       : startingStacksForNextHand({ seed, players, heroSeat });
+
+    if (stackOverrides) {
+      for (const [seat, amount] of Object.entries(stackOverrides)) {
+        startingStacks[seat] = amount;
+      }
+    }
     const autoActionLimit = autoActionLimitForState(state);
     const manualSpot = state.ui.spotMode === "manual"
       ? { pot: state.hand.pot || 24, toCall: state.hand.toCall || 8 }
@@ -114,6 +122,90 @@ const actions = {
   newGame() {
     // Reset every seat to the configured starting stack and deal fresh.
     actions.dealNewHand(undefined, { resetStacks: true });
+  },
+  rebuyHero() {
+    // Top the hero back up to the starting stack (others keep their stacks).
+    const heroSeat = Math.floor(state.config.players / 2);
+    actions.dealNewHand(undefined, { stackOverrides: { [heroSeat]: state.config.stack } });
+  },
+  rosterAdd({ name, profile = "standard" } = {}) {
+    const player = createPlayer({ name, profile });
+
+    if (!player) {
+      return;
+    }
+
+    updateState((draft) => {
+      draft.roster = saveRoster([...draft.roster, player]);
+    });
+  },
+  rosterRemove(id) {
+    updateState((draft) => {
+      draft.roster = saveRoster(draft.roster.filter((player) => player.id !== id));
+
+      const seatPlayers = { ...draft.config.seatPlayers };
+      for (const seat of Object.keys(seatPlayers)) {
+        if (seatPlayers[seat] === id) {
+          delete seatPlayers[seat];
+        }
+      }
+      draft.config.seatPlayers = seatPlayers;
+    });
+  },
+  setRosterOpen(open) {
+    if (state.ui.rosterOpen === open) {
+      return;
+    }
+
+    updateState((draft) => {
+      draft.ui.rosterOpen = open;
+    });
+  },
+  rosterSetProfile(id, profile) {
+    updateState((draft) => {
+      draft.roster = saveRoster(draft.roster.map((player) => (
+        player.id === id ? { ...player, profile } : player
+      )));
+    });
+  },
+  dealHomeGame() {
+    // Seat the known-player roster into the villain seats (round-robin if there
+    // are fewer players than seats) and deal — "the pub game".
+    if (!state.roster.length) {
+      return;
+    }
+
+    const players = state.config.players;
+    const heroSeat = Math.floor(players / 2);
+    const shuffled = [...state.roster].sort(() => Math.random() - 0.5);
+    const seatPlayers = {};
+    const seatProfiles = { ...state.config.seatProfiles };
+    let index = 0;
+
+    for (let seat = 0; seat < players; seat += 1) {
+      if (seat === heroSeat) {
+        continue;
+      }
+
+      const player = shuffled[index];
+
+      if (player) {
+        // Seat the next known player.
+        seatPlayers[seat] = player.id;
+        seatProfiles[String(seat)] = player.profile;
+        index += 1;
+      } else {
+        // Not enough known players — fill the rest with a standard player.
+        seatProfiles[String(seat)] = "standard";
+      }
+    }
+
+    updateState((draft) => {
+      draft.config.seatPlayers = seatPlayers;
+      draft.config.seatProfiles = seatProfiles;
+    });
+
+    actions.dealNewHand();
   },
   setPlayers(players) {
     clearAutoActionTimer();

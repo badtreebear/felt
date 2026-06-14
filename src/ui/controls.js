@@ -100,6 +100,123 @@ export function renderControls(container, state, actions) {
   }
 
   container.append(controls);
+  container.append(createRosterManager(state, actions));
+}
+
+function buildTypeSelect(value) {
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "Player type");
+
+  getProfileOptions().forEach((option) => {
+    const element = document.createElement("option");
+    element.value = option.id;
+    element.textContent = option.label;
+
+    if (value && option.id === value) {
+      element.selected = true;
+    }
+
+    select.append(element);
+  });
+
+  return select;
+}
+
+function createRosterManager(state, actions) {
+  // Collapsible so it doesn't eat screen space; open state is remembered.
+  const section = document.createElement("details");
+  section.className = "roster-manager";
+  section.open = Boolean(state.ui.rosterOpen);
+  section.addEventListener("toggle", () => actions.setRosterOpen(section.open));
+
+  const summary = document.createElement("summary");
+  summary.textContent = `Known players (${state.roster.length})`;
+  section.append(summary);
+
+  const body = document.createElement("div");
+  body.className = "roster-body";
+
+  const form = document.createElement("form");
+  form.className = "roster-add";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.placeholder = "Name";
+  nameInput.setAttribute("aria-label", "Player name");
+
+  const typeSelect = buildTypeSelect();
+
+  const addButton = document.createElement("button");
+  addButton.type = "submit";
+  addButton.textContent = "Add";
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = nameInput.value.trim();
+
+    if (!name) {
+      return;
+    }
+
+    actions.rosterAdd({ name, profile: typeSelect.value });
+    nameInput.value = "";
+    nameInput.focus();
+  });
+
+  form.append(nameInput, typeSelect, addButton);
+  body.append(form);
+
+  const list = document.createElement("ul");
+  list.className = "roster-list";
+
+  if (!state.roster.length) {
+    const empty = document.createElement("li");
+    empty.className = "roster-empty";
+    empty.textContent = "No players yet. Add your regulars, then deal the pub game.";
+    list.append(empty);
+  } else {
+    state.roster.forEach((player) => {
+      const item = document.createElement("li");
+      item.className = "roster-item";
+
+      const dot = document.createElement("span");
+      dot.className = "roster-dot";
+      dot.style.background = player.color;
+
+      const label = document.createElement("span");
+      label.className = "roster-name";
+      label.textContent = player.name;
+
+      const select = buildTypeSelect(player.profile);
+      select.className = "roster-type";
+      select.title = "Change player type";
+      select.addEventListener("change", () => actions.rosterSetProfile(player.id, select.value));
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "roster-remove";
+      remove.textContent = "✕";
+      remove.title = `Remove ${player.name}`;
+      remove.addEventListener("click", () => actions.rosterRemove(player.id));
+
+      item.append(dot, label, select, remove);
+      list.append(item);
+    });
+  }
+
+  body.append(list);
+
+  const pubGame = document.createElement("button");
+  pubGame.type = "button";
+  pubGame.className = "roster-pub-game";
+  pubGame.textContent = "Deal pub game";
+  pubGame.title = "Seat your known players and deal a hand";
+  pubGame.disabled = state.roster.length === 0;
+  pubGame.addEventListener("click", () => actions.dealHomeGame());
+  body.append(pubGame);
+
+  section.append(body);
+  return section;
 }
 
 function createActionSpeedControl(state, actions) {

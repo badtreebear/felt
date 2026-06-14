@@ -132,8 +132,14 @@ function createSeats(state, actions) {
     const title = document.createElement("div");
     title.className = "seat__title";
 
+    const seatPlayer = isHero ? null : rosterPlayerForSeat(state, seat);
+    if (seatPlayer?.color) {
+      seatElement.style.setProperty("--seat-accent", seatPlayer.color);
+      seatElement.classList.add("seat--named");
+    }
+
     const name = document.createElement("strong");
-    name.textContent = seatLabel(seat, heroSeat);
+    name.textContent = seatPlayer ? seatPlayer.name : seatLabel(seat, heroSeat);
 
     const stack = document.createElement("span");
     stack.textContent = formatAmount(phase?.stacks?.[seat] ?? state.config.stack, state);
@@ -514,7 +520,12 @@ function createHandPanel(state, showdown, actions) {
   const completionCue = createCompletionCue(state, actions);
   const coachPanel = createCoachPanel(state, actions, { handComplete: isTerminalHand(state) });
 
-  panel.append(heading, meta);
+  const bustBanner = createBustBanner(state, actions);
+  if (bustBanner) {
+    panel.append(heading, bustBanner, meta);
+  } else {
+    panel.append(heading, meta);
+  }
 
   if (heroControls) {
     panel.append(heroControls);
@@ -955,6 +966,48 @@ function createMeta(label, value) {
 
 function seatLabel(seat, heroSeat) {
   return seat === heroSeat ? "Hero" : `Seat ${seat + 1}`;
+}
+
+function rosterPlayerForSeat(state, seat) {
+  const id = state.config.seatPlayers?.[seat];
+
+  if (!id) {
+    return null;
+  }
+
+  return state.roster?.find((player) => player.id === id) || null;
+}
+
+function heroIsBusted(state) {
+  if (!isTerminalHand(state)) {
+    return false;
+  }
+
+  const phase = currentPhaseState(state);
+  const stack = phase?.stacks?.[state.config.heroSeat];
+  return typeof stack === "number" && stack <= 0;
+}
+
+function createBustBanner(state, actions) {
+  if (!actions || !heroIsBusted(state)) {
+    return null;
+  }
+
+  const banner = document.createElement("div");
+  banner.className = "bust-banner";
+
+  const text = document.createElement("p");
+  text.textContent = "You're out of chips — rebuy or start a new game.";
+
+  const row = document.createElement("div");
+  row.className = "bust-banner__actions";
+  row.append(
+    createHeroActionButton(`Rebuy ${formatAmount(state.config.stack, state)}`, () => actions.rebuyHero()),
+    createHeroActionButton("New game", () => actions.newGame()),
+  );
+
+  banner.append(text, row);
+  return banner;
 }
 
 function formatPercent(value) {

@@ -9,7 +9,9 @@ export const state = {
     stack: 200,
     tableStacks: {},
     seatProfiles: {},
+    seatPlayers: {},
   },
+  roster: [],
   hand: {
     seed: "",
     deck: [],
@@ -47,6 +49,7 @@ export const state = {
     heroRaiseTo: 2.5,
     spotMode: "dealt",
     actionDelayMs: 1000,
+    rosterOpen: false,
   },
   coach: {
     config: {
