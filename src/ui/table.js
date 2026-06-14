@@ -123,6 +123,9 @@ function createSeats(state, actions) {
     seatElement.classList.toggle("seat--winner", Boolean(isWinner));
     seatElement.classList.toggle("seat--folded", isFolded);
     seatElement.classList.toggle("seat--acting", isActing);
+    // Lift the seat above the board's stacking context while its range popover
+    // is open, so the popover paints above the community cards.
+    seatElement.classList.toggle("seat--popover-open", state.ui.openRangeSeat === seat);
     seatElement.style.setProperty("--seat-x", `${x}%`);
     seatElement.style.setProperty("--seat-y", `${y}%`);
 
@@ -191,7 +194,10 @@ function createSeats(state, actions) {
     seatElement.append(title, cards, badges);
 
     if (isHero) {
-      const chips = createMathsChips(state, actions);
+      // Chips on the seat are triggers only; the explain/coach popover renders
+      // in the hand panel (outside the table) so it's never trapped under the
+      // board's stacking context and never reflows the table.
+      const chips = createMathsChips(state, actions, { renderPopover: false });
 
       if (chips) {
         seatElement.append(chips);
@@ -483,9 +489,12 @@ function createHandPanel(state, showdown, actions) {
 
   if (shouldShowMathsPanel(state)) {
     meta.append(createMeta("To call", formatAmount(state.hand.toCall, state)));
-    meta.append(createMeta("Equity", `${formatPercent(state.maths.heroEquity)} ${state.maths.simStatus === "running" ? "running" : ""}`.trim()));
-    meta.append(createMeta("Pot odds", formatPercent(state.maths.requiredEquity)));
-    meta.append(createMeta("EV call", formatAmount(state.maths.evCall, state, { signed: true })));
+    // Clickable Equity / Pot odds / EV chips (with explain + coach popover),
+    // mirroring the hero-seat chips. Popover renders here in the hand panel.
+    const handChips = createMathsChips(state, actions, { renderPopover: true });
+    if (handChips) {
+      meta.append(handChips);
+    }
   }
 
   if (showdown) {

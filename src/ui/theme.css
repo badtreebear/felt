@@ -549,6 +549,12 @@ input:focus-visible {
   box-shadow: 0 16px 28px rgba(0, 0, 0, 0.28);
 }
 
+/* While a seat's range popover is open, lift it above the board (z-index 6)
+   so the popover paints over the community cards instead of behind them. */
+.seat--popover-open {
+  z-index: 40;
+}
+
 .seat--hero {
   border-color: rgba(201, 162, 39, 0.84);
   background: rgba(20, 57, 46, 0.95);

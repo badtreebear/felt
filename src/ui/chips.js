@@ -12,7 +12,7 @@ const CHIP_CONFIG = [
 const MATHS_POPOVER_CLOSE_DELAY_MS = 120;
 let mathsPopoverCloseTimer = null;
 
-export function createMathsChips(state, actions) {
+export function createMathsChips(state, actions, { renderPopover = true } = {}) {
   if (!shouldShowMathsPanel(state)) {
     return null;
   }
@@ -41,7 +41,7 @@ export function createMathsChips(state, actions) {
     tray.append(button);
   });
 
-  if (state.ui.openPopover) {
+  if (renderPopover && state.ui.openPopover) {
     tray.append(createPopover({
       id: "maths-popover",
       title: popoverTitle(state.ui.openPopover),
