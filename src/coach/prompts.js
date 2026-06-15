@@ -76,6 +76,21 @@ export function buildTrackerSummaryMessages({ snapshot }) {
 }
 
 export function buildTrackerLeakMessages({ snapshot }) {
+  if (snapshot?.isGood) {
+    return [
+      systemMessage(snapshot, "Tracker good-play snapshot"),
+      {
+        role: "user",
+        content: [
+          "Explain why this tracked play was good, in plain language.",
+          "Use the cards, position, action log, recommended action, and any EV numbers in the snapshot as authoritative.",
+          "Say what the hero did well and the principle worth repeating in similar spots.",
+          "Do not recompute odds or invent missing numbers.",
+        ].join(" "),
+      },
+    ];
+  }
+
   return [
     systemMessage(snapshot, "Tracker leak snapshot"),
     {

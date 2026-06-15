@@ -48,26 +48,27 @@ export function summarizeHands(hands = []) {
     foldToCbet: ratio(counts.cbetFolded, counts.cbetFaced),
     wtsd: ratio(counts.wtsd, total),
     netBb: round(counts.net),
-    leaks: rankedLeaks(tracked),
+    leaks: rankDecisions(tracked, (decision) => decision.leak, "costBb", "totalCostBb"),
+    highlights: rankDecisions(tracked, (decision) => decision.good, "benefitBb", "totalBenefitBb"),
   };
 }
 
-function rankedLeaks(hands) {
+function rankDecisions(hands, predicate, valueField, totalField) {
   const grouped = new Map();
 
   hands.forEach((hand) => {
-    (hand.decisions || []).filter((decision) => decision.leak).forEach((decision) => {
-      const key = decision.leakType || "Uncategorized leak";
+    (hand.decisions || []).filter(predicate).forEach((decision) => {
+      const key = decision.leakType || "Uncategorized";
       const item = grouped.get(key) || {
         leakType: key,
         count: 0,
-        totalCostBb: 0,
+        [totalField]: 0,
         recommended: decision.recommended || "",
         examples: [],
       };
 
       item.count += 1;
-      item.totalCostBb += Number(decision.costBb) || 0;
+      item[totalField] += Number(decision[valueField]) || 0;
       item.recommended = item.recommended || decision.recommended || "";
 
       if (item.examples.length < 8) {
@@ -80,6 +81,7 @@ function rankedLeaks(hands) {
           heroAction: decision.heroAction,
           recommended: decision.recommended,
           costBb: Number(decision.costBb) || 0,
+          benefitBb: Number(decision.benefitBb) || 0,
           net: hand.net,
           ts: hand.ts,
         });
@@ -90,9 +92,9 @@ function rankedLeaks(hands) {
   });
 
   return [...grouped.values()]
-    .map((item) => ({ ...item, totalCostBb: round(item.totalCostBb) }))
+    .map((item) => ({ ...item, [totalField]: round(item[totalField]) }))
     .sort((first, second) => (
-      second.totalCostBb - first.totalCostBb
+      second[totalField] - first[totalField]
       || second.count - first.count
       || first.leakType.localeCompare(second.leakType)
     ));

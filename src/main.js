@@ -1022,6 +1022,18 @@ function scheduleAutoAction() {
   const phase = currentAutoPhase(state);
 
   if (!phase) {
+    // The hero has folded and has no more decisions: auto-play the remaining
+    // streets to the end so the hand still records without the user clicking
+    // through each street. Normal (hero still in) hands are untouched.
+    if (heroIsOut(state) && canContinueScriptedHand(state)) {
+      // Always defer via a timer (even at instant pace) so each street runs on
+      // its own tick rather than recursing synchronously through the whole board.
+      autoActionTimer = window.setTimeout(() => {
+        autoActionTimer = null;
+        actions.advanceStreet();
+      }, Math.max(0, actionDelayForState(state)));
+    }
+
     return;
   }
 
@@ -1036,6 +1048,12 @@ function scheduleAutoAction() {
     autoActionTimer = null;
     advanceAutoAction(1);
   }, delay);
+}
+
+function heroIsOut(currentState) {
+  const heroSeat = currentState.config.heroSeat;
+  const phase = currentState.hand.postflop || currentState.hand.preflop;
+  return Boolean(phase?.folded?.[heroSeat]);
 }
 
 function advanceAutoAction(autoActionLimit) {

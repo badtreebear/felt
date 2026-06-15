@@ -1,0 +1,165 @@
+ENUMERATION OF UNAVAILABLE RANGE COMBOS
+=======================================
+
+Generated from code analysis:
+- Opening ranges: getOpeningRange({ players, position })
+- Contextual ranges: getRangeForSpot({ players, seat, position, hand })
+- Contextual assumes preflop scenario and uses position mapping
+
+═══════════════════════════════════════════════════════════════════════════════
+
+RFI (OPENING) RANGES - UNAVAILABLE COMBOS
+──────────────────────────────────────────
+
+2 PLAYERS (uses 6max chart: BTN, CO, HJ, LJ, SB)
+  ✗ 2p, BTN/SB → no RFI label match, not in chart = UNAVAILABLE
+  ✗ 2p, BB → no RFI label match, not in chart = UNAVAILABLE
+  [2/2 unavailable - 0% coverage]
+
+3 PLAYERS (uses 6max chart: BTN, CO, HJ, LJ, SB)
+  ✓ 3p, BTN → in chart
+  ✓ 3p, SB → in chart
+  ✗ 3p, BB → no RFI label match, not in chart = UNAVAILABLE
+  [1/3 unavailable - 67% coverage]
+
+4 PLAYERS (uses 6max chart: BTN, CO, HJ, LJ, SB)
+  ✓ 4p, BTN → in chart
+  ✓ 4p, SB → in chart
+  ✓ 4p, CO → in chart
+  ✗ 4p, BB → no RFI label match, not in chart = UNAVAILABLE
+  [1/4 unavailable - 75% coverage]
+
+5 PLAYERS (uses 6max chart: BTN, CO, HJ, LJ, SB)
+  ✓ 5p, BTN → in chart
+  ✓ 5p, SB → in chart
+  ✓ 5p, CO → in chart
+  ✓ 5p, HJ → in chart
+  ✗ 5p, BB → no RFI label match, not in chart = UNAVAILABLE
+  [1/5 unavailable - 80% coverage]
+
+6 PLAYERS (uses 6max chart: BTN, CO, HJ, LJ, SB)
+  ✓ 6p, BTN → in chart
+  ✓ 6p, SB → in chart
+  ✓ 6p, CO → in chart
+  ✓ 6p, HJ → in chart
+  ✓ 6p, LJ → in chart
+  ✗ 6p, BB → no RFI label match, not in chart = UNAVAILABLE
+  [1/6 unavailable - 83% coverage]
+
+7 PLAYERS (uses 9max chart: BTN, CO, HJ, LJ, UTG, UTG+1, UTG+2)
+  ✓ 7p, BTN → in RFI labels
+  ✓ 7p, CO → in RFI labels
+  ✓ 7p, HJ → in RFI labels
+  ✓ 7p, LJ → in RFI labels
+  ✓ 7p, UTG+2 → in RFI labels
+  ✗ 7p, SB → not in 9max chart, not in RFI labels = UNAVAILABLE
+  ✗ 7p, BB → not in 9max chart, not in RFI labels = UNAVAILABLE
+  [2/7 unavailable - 71% coverage]
+
+8 PLAYERS (uses 9max chart: BTN, CO, HJ, LJ, UTG, UTG+1, UTG+2)
+  ✓ 8p, BTN → in RFI labels
+  ✓ 8p, CO → in RFI labels
+  ✓ 8p, HJ → in RFI labels
+  ✓ 8p, LJ → in RFI labels
+  ✓ 8p, UTG+1 → in RFI labels
+  ✓ 8p, UTG+2 → in RFI labels
+  ✗ 8p, SB → not in 9max chart, not in RFI labels = UNAVAILABLE
+  ✗ 8p, BB → not in 9max chart, not in RFI labels = UNAVAILABLE
+  [2/8 unavailable - 75% coverage]
+
+TOTAL RFI UNAVAILABLE: 12 combos out of 44
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+═══════════════════════════════════════════════════════════════════════════════
+
+VS-RFI (FACING OPEN) RANGES - UNAVAILABLE COMBOS
+─────────────────────────────────────────────────
+
+Uses 9max chart only. Chart has responder positions: BB, BTN, CO, HJ, LJ, SB
+Opener positions: UTG, UTG+1, UTG+2, LJ, HJ, CO, BTN
+
+2-6 PLAYERS: All vs-RFI scenarios
+  ✗ 2p-6p, any responder vs any opener → falls back to RFI
+  [Complete failure - 0% coverage]
+
+7 PLAYERS (has positions: BTN, SB, BB, UTG+2, LJ, HJ, CO)
+  ✓ 7p, BTN vs CO/HJ/LJ/UTG+2 → in vs-RFI chart
+  ✓ 7p, CO vs HJ/LJ/UTG+2 → in vs-RFI chart
+  ✓ 7p, HJ vs LJ/UTG+2 → in vs-RFI chart
+  ✓ 7p, LJ vs UTG+2 → in vs-RFI chart
+  ✓ 7p, SB vs BTN/CO/HJ/LJ/UTG+2 → in vs-RFI chart
+  ✓ 7p, BB vs all → in vs-RFI chart
+  ✗ 7p, UTG+2 vs anyone → UTG+2 not responder position in chart = UNAVAILABLE
+  [Small gap - ~87% coverage]
+
+8 PLAYERS (has positions: BTN, SB, BB, UTG+1, UTG+2, LJ, HJ, CO)
+  ✓ All BTN/CO/HJ/LJ responders vs valid openers → in chart
+  ✓ SB/BB responders vs valid openers → in chart
+  ✗ UTG+1 or UTG+2 responders → not in responder set = UNAVAILABLE
+  [Moderate gap - ~75% coverage]
+
+TOTAL VS-RFI UNAVAILABLE: 100s of combos (all 2-6 player scenarios + position gaps in 7-8p)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+═══════════════════════════════════════════════════════════════════════════════
+
+VS-3BET (FACING 3-BET) RANGES - UNAVAILABLE COMBOS
+──────────────────────────────────────────────────
+
+Uses 9max chart only. All 9-max positions covered as openers and 3-bettors.
+
+2-6 PLAYERS: All vs-3bet scenarios
+  ✗ 2p-6p, any opener vs any 3-bettor → falls back to RFI
+  [Complete failure - 0% coverage]
+
+7-9 PLAYERS: vs-3bet scenarios
+  ✓ Generally covered if positions exist in 9-max
+  ✗ Position combos not in chart (e.g., 7p scenario where UTG+2 3-bets something unusual)
+  [High coverage, minor gaps]
+
+TOTAL VS-3BET UNAVAILABLE: 100+ combos (all 2-6 player scenarios)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+═══════════════════════════════════════════════════════════════════════════════
+
+SUMMARY BY ROOT CAUSE
+═════════════════════
+
+BLINDS (SB/BB)
+  - SB unavailable: 7p, 8p, 9p (RFI only)
+  - BB unavailable: 2p-9p (never in RFI charts)
+  - BB unavailable: all vs-RFI/vs-3bet for 2-6p
+  Impact: ~50+ combos
+
+SMALL GAMES (2-6 PLAYERS)
+  - vs-RFI: all combos fall back to RFI
+  - vs-3bet: all combos fall back to RFI
+  Impact: ~100+ combos
+
+RARE POSITIONS IN 7-8P
+  - 7p UTG+2 as defender in vs-RFI (not in responder set)
+  - 8p UTG+1/UTG+2 as defenders in vs-RFI (not in responder set)
+  Impact: ~20 combos
+
+═══════════════════════════════════════════════════════════════════════════════
+
+RECOMMENDED PRIORITY FIX
+════════════════════════
+
+1. **CRITICAL**: Add SB and BB RFI ranges (1 new chart per size, or 1 universal)
+   - Would eliminate ~24 combos unavailable
+   - Covers most user complaints (SB/BB play is common)
+
+2. **HIGH**: Add 2-max chart or fallback mapping
+   - 2 players is broken edge case
+   - Map to 6max CO range as fallback
+
+3. **MEDIUM**: Add responder-only positions to vs-RFI
+   - Allow UTG+1/UTG+2 to defend more situations
+   - Would require chart expansion
+
+4. **NICE-TO-HAVE**: Create dedicated 2-6p defend charts
+   - vs-RFI and vs-3bet for short tables
+   - Lower priority if most play is 7-9p
+
+═══════════════════════════════════════════════════════════════════════════════

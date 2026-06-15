@@ -12,9 +12,16 @@ export function scorePostflopEvDecision({ postflop, action, evaluation } = {}) {
   }
 
   const ev = Number(evaluation.evCall);
-  const leak = (action === "call" && ev < 0) || (action === "fold" && ev > 0);
   const recommended = ev > 0 ? "call" : "fold";
-  const costBb = leak ? roundCost(Math.abs(ev)) : 0;
+  const isLeak = (action === "call" && ev < 0) || (action === "fold" && ev > 0);
+  const isGood = (action === "call" && ev > 0) || (action === "fold" && ev < 0);
+
+  let category = "";
+  if (isLeak) {
+    category = action === "call" ? "called -EV (paid off)" : "folded +EV";
+  } else if (isGood) {
+    category = action === "call" ? "good call (+EV)" : "good fold";
+  }
 
   return {
     street: postflop.street,
@@ -22,13 +29,15 @@ export function scorePostflopEvDecision({ postflop, action, evaluation } = {}) {
     hand: canonicalHandKey(postflop.holeCards?.[postflop.heroSeat]) || "",
     heroAction: action,
     recommended,
-    leak,
-    leakType: leak ? (action === "call" ? "called -EV (paid off)" : "folded +EV") : "",
+    leak: isLeak,
+    good: isGood,
+    leakType: category,
     equity: roundMetric(evaluation.equity),
     requiredEquity: roundMetric(evaluation.requiredEquity),
     evCall: roundMetric(ev),
     verdict: evaluation.verdict || recommended,
-    costBb,
+    costBb: isLeak ? roundCost(Math.abs(ev)) : 0,
+    benefitBb: isGood ? roundCost(Math.abs(ev)) : 0,
     potBeforeHeroCall: evaluation.potBeforeHeroCall ?? null,
     toCall,
   };
@@ -54,17 +63,32 @@ export function scorePostflopSizing({ postflop, action, committed, allIn, commit
   if (allIn && commitmentEval) {
     const ev = Number(commitmentEval.evCall);
 
-    if (!Number.isFinite(ev) || ev >= 0) {
+    if (!Number.isFinite(ev)) {
       return null;
     }
 
-    return baseDecision(postflop, action, commit, {
-      leakType: "got it in light",
-      recommended: "pot control / fold",
-      costBb: roundCost(Math.abs(ev)),
+    const metrics = {
       equity: roundMetric(commitmentEval.equity),
       requiredEquity: roundMetric(commitmentEval.requiredEquity),
       evCall: roundMetric(ev),
+    };
+
+    if (ev < 0) {
+      return baseDecision(postflop, action, commit, {
+        ...metrics,
+        leak: true,
+        leakType: "got it in light",
+        recommended: "pot control / fold",
+        costBb: roundCost(Math.abs(ev)),
+      });
+    }
+
+    return baseDecision(postflop, action, commit, {
+      ...metrics,
+      good: true,
+      leakType: "got it in good",
+      recommended: "keep getting it in",
+      benefitBb: roundCost(ev),
     });
   }
 
@@ -76,6 +100,7 @@ export function scorePostflopSizing({ postflop, action, committed, allIn, commit
 
   if (ratio >= OVERSIZED_RATIO) {
     return baseDecision(postflop, action, commit, {
+      leak: true,
       leakType: "oversized bet (review)",
       recommended: "smaller sizing",
       costBb: 0,
@@ -84,6 +109,7 @@ export function scorePostflopSizing({ postflop, action, committed, allIn, commit
 
   if (ratio > 0 && ratio <= UNDERSIZED_RATIO) {
     return baseDecision(postflop, action, commit, {
+      leak: true,
       leakType: "undersized bet (review)",
       recommended: "larger sizing",
       costBb: 0,
@@ -102,13 +128,15 @@ function baseDecision(postflop, action, commit, extra) {
     hand: canonicalHandKey(postflop.holeCards?.[postflop.heroSeat]) || "",
     heroAction: action,
     recommended: extra.recommended || "",
-    leak: true,
+    leak: extra.leak ?? false,
+    good: extra.good ?? false,
     leakType: extra.leakType,
     equity: extra.equity ?? null,
     requiredEquity: extra.requiredEquity ?? null,
     evCall: extra.evCall ?? null,
     verdict: extra.recommended || "",
     costBb: extra.costBb ?? 0,
+    benefitBb: extra.benefitBb ?? 0,
     potBeforeHeroCall: Math.max(0, Number(postflop.pot) || 0),
     toCall: commit,
   };

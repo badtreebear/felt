@@ -211,16 +211,8 @@ function createSeats(state, actions) {
 
     seatElement.append(title, cards, badges);
 
-    if (isHero) {
-      // Chips on the seat are triggers only; the explain/coach popover renders
-      // in the hand panel (outside the table) so it's never trapped under the
-      // board's stacking context and never reflows the table.
-      const chips = createMathsChips(state, actions, { renderPopover: false });
-
-      if (chips) {
-        seatElement.append(chips);
-      }
-    }
+    // Maths chips render in the hand panel (outside the table) so they never
+    // overlap the board or reflow the seat frames.
 
     seats.append(seatElement);
   }
@@ -605,6 +597,24 @@ function createHeroActionControls(state, actions) {
   return createPreflopHeroActionControls(state, actions);
 }
 
+function createSizePresetRow(presets) {
+  const row = document.createElement("div");
+  row.className = "hero-actions__presets";
+
+  presets
+    .filter((preset) => Number.isFinite(preset.amount) && preset.amount > 0)
+    .forEach((preset) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "hero-actions__preset";
+      button.textContent = preset.label;
+      button.addEventListener("click", preset.onClick);
+      row.append(button);
+    });
+
+  return row;
+}
+
 function createPreflopHeroActionControls(state, actions) {
   const legal = legalHeroActions(state.hand.preflop);
 
@@ -646,7 +656,7 @@ function createPreflopHeroActionControls(state, actions) {
   input.step = "0.5";
   input.value = String(raiseTo);
   input.setAttribute("aria-label", "Raise amount");
-  input.addEventListener("input", (event) => {
+  input.addEventListener("change", (event) => {
     actions.setHeroRaiseTo(Number(event.currentTarget.value));
   });
 
@@ -665,17 +675,16 @@ function createPreflopHeroActionControls(state, actions) {
     ));
   }
 
-  const presetRow = document.createElement("div");
-  presetRow.className = "hero-actions__presets";
-
-  uniqueNumbers([2.5, 3, state.hand.pot]).forEach((amount) => {
-    const target = clampAmount(amount, legal.minRaiseTo, legal.maxRaiseTo);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = amount === state.hand.pot ? "Pot" : formatAmount(amount, state);
-    button.addEventListener("click", () => actions.setHeroRaiseTo(target));
-    presetRow.append(button);
-  });
+  const presetRow = createSizePresetRow(
+    uniqueNumbers([2.5, 3, state.hand.pot]).map((amount) => {
+      const target = clampAmount(amount, legal.minRaiseTo, legal.maxRaiseTo);
+      return {
+        label: amount === state.hand.pot ? "Pot" : formatAmount(amount, state),
+        amount: target,
+        onClick: () => actions.setHeroRaiseTo(target),
+      };
+    }),
+  );
 
   wrapper.append(heading, buttonRow, raiseRow, presetRow);
   return wrapper;
@@ -748,7 +757,13 @@ function createPostflopHeroActionControls(state, actions) {
         ));
       }
 
-      wrapper.append(raiseRow);
+      const potRaise = state.hand.pot;
+      const raisePresets = createSizePresetRow([
+        { label: "½ pot", amount: clampAmount(potRaise * 0.5, legal.minRaiseTo, legal.maxRaiseTo), onClick: () => actions.setHeroRaiseTo(clampAmount(potRaise * 0.5, legal.minRaiseTo, legal.maxRaiseTo)) },
+        { label: "Pot", amount: clampAmount(potRaise, legal.minRaiseTo, legal.maxRaiseTo), onClick: () => actions.setHeroRaiseTo(clampAmount(potRaise, legal.minRaiseTo, legal.maxRaiseTo)) },
+      ]);
+
+      wrapper.append(raiseRow, raisePresets);
     }
 
     return wrapper;
@@ -766,7 +781,7 @@ function createPostflopHeroActionControls(state, actions) {
   input.step = "0.5";
   input.value = String(betAmount);
   input.setAttribute("aria-label", "Bet amount");
-  input.addEventListener("input", (event) => {
+  input.addEventListener("change", (event) => {
     actions.setHeroRaiseTo(Number(event.currentTarget.value));
   });
 
@@ -783,17 +798,12 @@ function createPostflopHeroActionControls(state, actions) {
     ));
   }
 
-  const presetRow = document.createElement("div");
-  presetRow.className = "hero-actions__presets";
-
-  uniqueNumbers([state.hand.pot * 0.5, state.hand.pot, betAmount]).forEach((amount) => {
-    const target = clampAmount(amount, legal.minBet, legal.maxBet);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = amount === state.hand.pot ? "Pot" : formatAmount(target, state);
-    button.addEventListener("click", () => actions.setHeroRaiseTo(target));
-    presetRow.append(button);
-  });
+  const pot = state.hand.pot;
+  const presetRow = createSizePresetRow([
+    { label: "½ pot", amount: clampAmount(pot * 0.5, effectiveMinBet, legal.maxBet), onClick: () => actions.setHeroRaiseTo(clampAmount(pot * 0.5, effectiveMinBet, legal.maxBet)) },
+    { label: "¾ pot", amount: clampAmount(pot * 0.75, effectiveMinBet, legal.maxBet), onClick: () => actions.setHeroRaiseTo(clampAmount(pot * 0.75, effectiveMinBet, legal.maxBet)) },
+    { label: "Pot", amount: clampAmount(pot, effectiveMinBet, legal.maxBet), onClick: () => actions.setHeroRaiseTo(clampAmount(pot, effectiveMinBet, legal.maxBet)) },
+  ]);
 
   wrapper.append(heading, buttonRow, betRow, presetRow);
   return wrapper;

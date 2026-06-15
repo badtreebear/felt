@@ -1716,7 +1716,14 @@ input:focus-visible {
 }
 
 .hero-actions__presets {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 6px;
+}
+
+.hero-actions__preset {
+  min-height: 30px !important;
+  padding: 0 6px !important;
+  font-size: 0.82rem;
 }
 
 .hero-actions__raise input {
@@ -1744,6 +1751,18 @@ input:focus-visible {
 .hero-actions__presets button:hover {
   border-color: rgba(201, 162, 39, 0.72);
   background: rgba(201, 162, 39, 0.24);
+}
+
+.tracker-section-heading {
+  margin: 14px 0 6px;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brass, #c9a227);
+}
+
+.tracker-section-heading:first-child {
+  margin-top: 0;
 }
 
 .completion-cue {

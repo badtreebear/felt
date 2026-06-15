@@ -33,7 +33,11 @@ export function buildTrackerSummarySnapshot(state) {
 }
 
 export function buildTrackerLeakSnapshot(state, { leakType, exampleId } = {}) {
-  const leak = (state.tracker.summary?.leaks || []).find((candidate) => candidate.leakType === leakType) || null;
+  const highlights = state.tracker.summary?.highlights || [];
+  const leak = (state.tracker.summary?.leaks || []).find((candidate) => candidate.leakType === leakType)
+    || highlights.find((candidate) => candidate.leakType === leakType)
+    || null;
+  const isGood = highlights.some((candidate) => candidate.leakType === leakType);
   const example = selectedExample(leak, exampleId);
   const handId = example?.handId || example?.id;
   const hand = handId
@@ -43,12 +47,14 @@ export function buildTrackerLeakSnapshot(state, { leakType, exampleId } = {}) {
 
   return {
     hero: activeHeroName(state),
+    isGood,
     leak: leak ? {
       leakType: leak.leakType,
       count: leak.count,
       recommended: leak.recommended || "",
       totalCostBb: leak.totalCostBb ?? null,
-    } : { leakType: leakType || "", count: 0, recommended: "", totalCostBb: null },
+      totalBenefitBb: leak.totalBenefitBb ?? null,
+    } : { leakType: leakType || "", count: 0, recommended: "", totalCostBb: null, totalBenefitBb: null },
     example: example ? exampleSummary(example) : null,
     hand: hand ? {
       id: hand.id,
@@ -74,6 +80,8 @@ export function buildTrackerLeakSnapshot(state, { leakType, exampleId } = {}) {
       requiredEquity: decision.requiredEquity ?? null,
       equity: decision.equity ?? null,
       costBb: decision.costBb ?? decision.bbDelta ?? null,
+      benefitBb: decision.benefitBb ?? null,
+      good: Boolean(decision.good),
     } : null,
   };
 }

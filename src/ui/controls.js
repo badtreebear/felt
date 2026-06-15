@@ -352,46 +352,68 @@ function createTrackerPanel(state, actions) {
   }
 
   const leaks = state.tracker.summary?.leaks || [];
+  const highlights = state.tracker.summary?.highlights || [];
 
-  if (!leaks.length) {
+  if (!leaks.length && !highlights.length) {
     const clean = document.createElement("p");
     clean.className = "tracker-empty";
-    clean.textContent = "No preflop leaks found in the tracked hands yet.";
+    clean.textContent = "No leaks or good plays found in the tracked hands yet.";
     section.append(clean);
     return section;
   }
 
+  if (leaks.length) {
+    section.append(createCategoryHeading("Leaks"));
+    section.append(createCategoryList(leaks, "totalCostBb", "lost", state, actions));
+  }
+
+  if (highlights.length) {
+    section.append(createCategoryHeading("Good plays"));
+    section.append(createCategoryList(highlights, "totalBenefitBb", "won", state, actions));
+  }
+
+  return section;
+}
+
+function createCategoryHeading(text) {
+  const heading = document.createElement("h4");
+  heading.className = "tracker-section-heading";
+  heading.textContent = text;
+  return heading;
+}
+
+function createCategoryList(categories, totalField, totalVerb, state, actions) {
   const list = document.createElement("ol");
   list.className = "tracker-leaks";
 
-  leaks.forEach((leak) => {
+  categories.forEach((category) => {
     const item = document.createElement("li");
     item.className = "tracker-leak";
 
     const button = document.createElement("button");
     button.type = "button";
     button.className = "tracker-leak__button";
-    button.setAttribute("aria-expanded", String(state.tracker.selectedLeakType === leak.leakType));
-    button.addEventListener("click", () => actions.setTrackerLeak(leak.leakType));
+    button.setAttribute("aria-expanded", String(state.tracker.selectedLeakType === category.leakType));
+    button.addEventListener("click", () => actions.setTrackerLeak(category.leakType));
 
     const name = document.createElement("strong");
-    name.textContent = leak.leakType;
+    name.textContent = category.leakType;
 
+    const total = Number(category[totalField]) || 0;
     const meta = document.createElement("span");
-    meta.textContent = `${leak.count} spot${leak.count === 1 ? "" : "s"}${leak.recommended ? ` - usually ${leak.recommended}` : ""}`;
+    meta.textContent = `${category.count} spot${category.count === 1 ? "" : "s"}${total ? ` - ${total} bb ${totalVerb}` : ""}`;
 
     button.append(name, meta);
     item.append(button);
 
-    if (state.tracker.selectedLeakType === leak.leakType) {
-      item.append(createLeakExamples(leak.examples || [], leak.leakType, state, actions));
+    if (state.tracker.selectedLeakType === category.leakType) {
+      item.append(createLeakExamples(category.examples || [], category.leakType, state, actions));
     }
 
     list.append(item);
   });
 
-  section.append(list);
-  return section;
+  return list;
 }
 
 function createTrackerCoachSummary(state, actions) {
