@@ -15,6 +15,7 @@ export function renderControls(container, state, actions) {
   controls.className = "controls";
   controls.setAttribute("aria-label", "Hand controls");
 
+  controls.append(createHeroControl(state, actions));
   controls.append(createModeControl(state, actions));
 
   controls.append(
@@ -83,7 +84,15 @@ export function renderControls(container, state, actions) {
     title: "Seat your known players and deal a hand.",
   });
 
-  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton);
+  const trackerButton = createButton({
+    label: "Tracker",
+    icon: "bar-chart-3",
+    onClick: () => actions.setTrackerOpen(!state.ui.trackerOpen),
+    highlight: state.ui.trackerOpen,
+    title: "Open the active hero's hand tracker.",
+  });
+
+  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton, trackerButton);
   controls.append(createCoachSettingsControl(state, actions));
   controls.append(createActionSpeedControl(state, actions));
 
@@ -109,7 +118,304 @@ export function renderControls(container, state, actions) {
   }
 
   container.append(controls);
+  if (state.ui.trackerOpen) {
+    container.append(createTrackerPanel(state, actions));
+  }
   container.append(createRosterManager(state, actions));
+}
+
+function createHeroControl(state, actions) {
+  const active = activeHero(state);
+  const wrapper = document.createElement("form");
+  wrapper.className = "hero-picker";
+
+  const field = document.createElement("label");
+  field.className = "field hero-picker__select";
+  field.htmlFor = "hero-picker";
+
+  const label = document.createElement("span");
+  label.textContent = "Hero";
+
+  const select = document.createElement("select");
+  select.id = "hero-picker";
+  select.disabled = state.heroes.length === 0;
+  select.addEventListener("change", (event) => actions.selectHero(event.currentTarget.value));
+
+  state.heroes.forEach((hero) => {
+    const option = document.createElement("option");
+    option.value = hero.id;
+    option.textContent = hero.name;
+    select.append(option);
+  });
+  select.value = state.activeHeroId;
+  field.append(label, select);
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.placeholder = "Hero name";
+  nameInput.setAttribute("aria-label", "Hero name");
+
+  const addButton = document.createElement("button");
+  addButton.type = "submit";
+  addButton.className = "hero-picker__button";
+  addButton.textContent = "Add";
+
+  const renameButton = document.createElement("button");
+  renameButton.type = "button";
+  renameButton.className = "hero-picker__button";
+  renameButton.textContent = "Rename";
+  renameButton.disabled = !active;
+  renameButton.addEventListener("click", () => {
+    const name = nameInput.value.trim() || window.prompt("Rename hero", active?.name || "")?.trim();
+
+    if (name && active) {
+      actions.heroRename(active.id, name);
+      nameInput.value = "";
+    }
+  });
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "hero-picker__icon";
+  removeButton.innerHTML = '<i data-lucide="trash-2" aria-hidden="true"></i>';
+  removeButton.title = active ? `Delete ${active.name} and their tracked hands` : "Delete hero";
+  removeButton.setAttribute("aria-label", removeButton.title);
+  removeButton.disabled = !active;
+  removeButton.addEventListener("click", () => {
+    if (active && window.confirm(`Delete ${active.name} and their tracked hands?`)) {
+      actions.heroRemove(active.id);
+    }
+  });
+
+  wrapper.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = nameInput.value.trim();
+
+    if (!name) {
+      return;
+    }
+
+    actions.heroAdd({ name });
+    nameInput.value = "";
+  });
+
+  wrapper.append(field, nameInput, addButton, renameButton, removeButton);
+  return wrapper;
+}
+
+function createTrackerPanel(state, actions) {
+  const hero = activeHero(state);
+  const section = document.createElement("section");
+  section.className = "tracker-panel";
+  section.setAttribute("aria-label", "Hero tracker");
+
+  const header = document.createElement("div");
+  header.className = "tracker-panel__header";
+
+  const title = document.createElement("div");
+  const eyebrow = document.createElement("p");
+  eyebrow.textContent = "Tracker";
+  const heading = document.createElement("h2");
+  heading.textContent = hero ? hero.name : "No hero";
+  title.append(eyebrow, heading);
+
+  header.append(title, createHeroFileControls(state, actions));
+  section.append(header, createStatsStrip(state.tracker.summary));
+
+  if (state.ui.trackerImportStatus?.message) {
+    const status = document.createElement("p");
+    status.className = "tracker-status";
+    status.classList.toggle("tracker-status--error", state.ui.trackerImportStatus.kind === "error");
+    status.textContent = state.ui.trackerImportStatus.message;
+    section.append(status);
+  }
+
+  if (state.tracker.status === "loading") {
+    const loading = document.createElement("p");
+    loading.className = "tracker-empty";
+    loading.textContent = "Loading tracker...";
+    section.append(loading);
+    return section;
+  }
+
+  if (!state.tracker.hands.length) {
+    const empty = document.createElement("p");
+    empty.className = "tracker-empty";
+    empty.textContent = "No tracked hands yet. Play a dealt hand and this fills itself in.";
+    section.append(empty);
+    return section;
+  }
+
+  const leaks = state.tracker.summary?.leaks || [];
+
+  if (!leaks.length) {
+    const clean = document.createElement("p");
+    clean.className = "tracker-empty";
+    clean.textContent = "No preflop leaks found in the tracked hands yet.";
+    section.append(clean);
+    return section;
+  }
+
+  const list = document.createElement("ol");
+  list.className = "tracker-leaks";
+
+  leaks.forEach((leak) => {
+    const item = document.createElement("li");
+    item.className = "tracker-leak";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tracker-leak__button";
+    button.setAttribute("aria-expanded", String(state.tracker.selectedLeakType === leak.leakType));
+    button.addEventListener("click", () => actions.setTrackerLeak(leak.leakType));
+
+    const name = document.createElement("strong");
+    name.textContent = leak.leakType;
+
+    const meta = document.createElement("span");
+    meta.textContent = `${leak.count} spot${leak.count === 1 ? "" : "s"}${leak.recommended ? ` - usually ${leak.recommended}` : ""}`;
+
+    button.append(name, meta);
+    item.append(button);
+
+    if (state.tracker.selectedLeakType === leak.leakType) {
+      item.append(createLeakExamples(leak.examples || [], actions));
+    }
+
+    list.append(item);
+  });
+
+  section.append(list);
+  return section;
+}
+
+function createHeroFileControls(state, actions) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "tracker-file-tools";
+
+  const exportFull = document.createElement("button");
+  exportFull.type = "button";
+  exportFull.className = "roster-tool-button";
+  exportFull.innerHTML = '<i data-lucide="download" aria-hidden="true"></i><span>Export full</span>';
+  exportFull.disabled = !state.activeHeroId;
+  exportFull.addEventListener("click", () => {
+    const payload = actions.heroExport({ includeHands: true });
+
+    if (payload) {
+      downloadJson(payload, `${safeFileName(payload.hero.name)}-felt-tracker.json`);
+      actions.setTrackerImportStatus?.({
+        kind: "success",
+        message: `Exported ${payload.hands.length} tracked hand${payload.hands.length === 1 ? "" : "s"}.`,
+      });
+    }
+  });
+
+  const exportHero = document.createElement("button");
+  exportHero.type = "button";
+  exportHero.className = "roster-tool-button";
+  exportHero.innerHTML = '<i data-lucide="download" aria-hidden="true"></i><span>Export hero</span>';
+  exportHero.disabled = !state.activeHeroId;
+  exportHero.addEventListener("click", () => {
+    const payload = actions.heroExport({ includeHands: false });
+
+    if (payload) {
+      downloadJson(payload, `${safeFileName(payload.hero.name)}-felt-hero.json`);
+      actions.setTrackerImportStatus?.({
+        kind: "success",
+        message: "Exported hero definition.",
+      });
+    }
+  });
+
+  const importInput = document.createElement("input");
+  importInput.type = "file";
+  importInput.accept = ".json,application/json";
+  importInput.className = "roster-import-input";
+  importInput.setAttribute("aria-label", "Import hero tracker JSON");
+
+  const importButton = document.createElement("button");
+  importButton.type = "button";
+  importButton.className = "roster-tool-button";
+  importButton.innerHTML = '<i data-lucide="upload" aria-hidden="true"></i><span>Import</span>';
+  importButton.addEventListener("click", () => importInput.click());
+
+  importInput.addEventListener("change", async (event) => {
+    const file = event.currentTarget.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      await actions.heroImport(JSON.parse(await file.text()));
+    } catch {
+      actions.setTrackerImportStatus?.({
+        kind: "error",
+        message: "Import failed. Choose a valid hero JSON file.",
+      });
+    } finally {
+      event.currentTarget.value = "";
+    }
+  });
+
+  wrapper.append(exportFull, exportHero, importButton, importInput);
+  return wrapper;
+}
+
+function createStatsStrip(summary) {
+  const stats = summary || {
+    handsTracked: 0,
+    vpip: null,
+    pfr: null,
+    threeBet: null,
+    foldToCbet: null,
+    wtsd: null,
+    netBb: 0,
+  };
+  const strip = document.createElement("dl");
+  strip.className = "tracker-stats";
+
+  [
+    ["Hands", String(stats.handsTracked || 0)],
+    ["VPIP", formatPercent(stats.vpip)],
+    ["PFR", formatPercent(stats.pfr)],
+    ["3-bet", formatPercent(stats.threeBet)],
+    ["Fold c-bet", formatPercent(stats.foldToCbet)],
+    ["WTSD", formatPercent(stats.wtsd)],
+    ["Net", `${formatSigned(stats.netBb)} bb`],
+  ].forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    item.append(term, description);
+    strip.append(item);
+  });
+
+  return strip;
+}
+
+function createLeakExamples(examples, actions) {
+  const list = document.createElement("ul");
+  list.className = "tracker-examples";
+
+  examples.forEach((example) => {
+    const item = document.createElement("li");
+
+    const text = document.createElement("span");
+    text.textContent = `${example.hand || "--"} in ${example.spot}: ${example.heroAction} vs ${example.recommended}`;
+
+    const replay = document.createElement("button");
+    replay.type = "button";
+    replay.textContent = "Replay";
+    replay.addEventListener("click", () => actions.replayTrackerHand(example.seed));
+
+    item.append(text, replay);
+    list.append(item);
+  });
+
+  return list;
 }
 
 function buildTypeSelect(value, { excludeIds = [] } = {}) {
@@ -288,17 +594,56 @@ function createRosterFileControls(state, actions) {
 }
 
 function downloadRosterJson(roster) {
-  const blob = new Blob([`${JSON.stringify(roster, null, 2)}\n`], { type: "application/json" });
+  downloadJson(roster, "felt-roster.json");
+}
+
+function downloadJson(payload, filename) {
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = "felt-roster.json";
+  link.download = filename;
   link.style.display = "none";
   document.body.append(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function activeHero(state) {
+  return state.heroes.find((hero) => hero.id === state.activeHeroId)
+    || state.heroes[0]
+    || null;
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined) {
+    return "--";
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "--";
+  }
+
+  return `${Math.round(number * 100)}%`;
+}
+
+function formatSigned(value) {
+  const number = Number(value) || 0;
+  const rounded = Number.isInteger(number) ? number : number.toFixed(1).replace(/\.0$/, "");
+  return number > 0 ? `+${rounded}` : String(rounded);
+}
+
+function safeFileName(value) {
+  return String(value || "hero")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    || "hero";
 }
 
 function createWeightEditor(player, actions) {

@@ -203,6 +203,62 @@ input:focus-visible {
   padding-top: 12px;
 }
 
+.hero-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 40px;
+}
+
+.hero-picker__select select {
+  min-width: 120px;
+}
+
+.hero-picker input {
+  width: 132px;
+  min-height: 38px;
+  border: 1px solid rgba(247, 244, 237, 0.2);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #f7f4ed;
+  background: #102c27;
+}
+
+.hero-picker__button,
+.hero-picker__icon {
+  min-height: 36px;
+  border: 1px solid rgba(201, 162, 39, 0.42);
+  border-radius: 6px;
+  color: #fff9e6;
+  background: rgba(201, 162, 39, 0.14);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.hero-picker__button {
+  padding: 0 10px;
+}
+
+.hero-picker__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  padding: 0;
+}
+
+.hero-picker__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hero-picker__button:disabled,
+.hero-picker__icon:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .coach-settings-wrap {
   position: relative;
 }
@@ -568,6 +624,163 @@ input:focus-visible {
   border-radius: 8px;
   padding: 12px 14px;
   background: rgba(7, 23, 20, 0.5);
+}
+
+.tracker-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid rgba(201, 162, 39, 0.32);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(7, 23, 20, 0.62);
+}
+
+.tracker-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tracker-panel__header p {
+  margin: 0 0 2px;
+  color: var(--brass);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tracker-panel__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.tracker-file-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tracker-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.tracker-stats div {
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(247, 244, 237, 0.12);
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: rgba(16, 44, 39, 0.72);
+}
+
+.tracker-stats dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tracker-stats dd {
+  margin: 0;
+  color: #fff5cf;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.tracker-status,
+.tracker-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.tracker-status--error {
+  color: #ffd1cc;
+}
+
+.tracker-leaks {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tracker-leak {
+  display: grid;
+  gap: 8px;
+}
+
+.tracker-leak__button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(247, 244, 237, 0.16);
+  border-radius: 7px;
+  padding: 9px 11px;
+  color: #f7f4ed;
+  background: rgba(16, 44, 39, 0.72);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tracker-leak__button[aria-expanded="true"] {
+  border-color: rgba(201, 162, 39, 0.72);
+}
+
+.tracker-leak__button strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tracker-leak__button span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.tracker-examples {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 0 10px;
+  list-style: none;
+}
+
+.tracker-examples li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-left: 2px solid rgba(201, 162, 39, 0.42);
+  padding-left: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.tracker-examples span {
+  overflow-wrap: anywhere;
+}
+
+.tracker-examples button {
+  min-height: 30px;
+  border: 1px solid rgba(201, 162, 39, 0.42);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #fff9e6;
+  background: rgba(201, 162, 39, 0.14);
+  cursor: pointer;
+  font-weight: 800;
 }
 
 .roster-manager h3 {
@@ -1600,7 +1813,9 @@ input:focus-visible {
   .button,
   .toggle,
   .segmented,
-  .manual-spot {
+  .manual-spot,
+  .hero-picker,
+  .hero-picker input {
     width: 100%;
   }
 
@@ -1616,6 +1831,21 @@ input:focus-visible {
   .manual-spot {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .hero-picker {
+    align-items: stretch;
+  }
+
+  .hero-picker__button,
+  .hero-picker__icon {
+    width: 100%;
+  }
+
+  .tracker-leak__button,
+  .tracker-examples li {
+    align-items: stretch;
+    grid-template-columns: 1fr;
   }
 
   .phase-settings {

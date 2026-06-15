@@ -14,6 +14,8 @@ export const state = {
     seatAssignments: {},
   },
   roster: [],
+  heroes: [],
+  activeHeroId: "",
   hand: {
     seed: "",
     deck: [],
@@ -29,6 +31,8 @@ export const state = {
     startingStacks: {},
     preflop: null,
     postflop: null,
+    trackerRecordId: "",
+    trackerDecisions: [],
   },
   maths: {
     heroEquity: null,
@@ -54,6 +58,14 @@ export const state = {
     rosterOpen: false,
     rosterImportStatus: null,
     awaitingStart: false,
+    trackerOpen: false,
+    trackerImportStatus: null,
+  },
+  tracker: {
+    hands: [],
+    summary: null,
+    selectedLeakType: "",
+    status: "idle",
   },
   coach: {
     config: {

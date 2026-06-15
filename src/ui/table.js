@@ -77,7 +77,7 @@ function createBoard(state, showdown) {
   result.className = "showdown-result";
 
   if (showdown) {
-    const winnerNames = showdown.winnerSeats.map((seat) => seatLabel(seat, state.config.heroSeat));
+    const winnerNames = showdown.winnerSeats.map((seat) => seatLabel(seat, state.config.heroSeat, state));
     const winnerVerb = winnerNames.length === 1 ? "wins" : "win";
     result.textContent = `${winnerNames.join(" + ")} ${winnerVerb} with ${showdown.winningDescription}`;
   } else if (state.hand.postflop) {
@@ -142,7 +142,7 @@ function createSeats(state, actions) {
     const isOut = !isHero && Boolean(phase?.out?.[seat]);
     seatElement.classList.toggle("seat--out", isOut);
 
-    const baseName = seatPlayer ? seatPlayer.name : seatLabel(seat, heroSeat);
+    const baseName = seatPlayer ? seatPlayer.name : seatLabel(seat, heroSeat, state);
     const name = document.createElement("strong");
     name.textContent = isOut ? `${baseName} · Out` : baseName;
 
@@ -562,7 +562,7 @@ function createHandPanel(state, showdown, actions) {
   [...state.hand.actionLog].reverse().forEach((entry) => {
     const item = document.createElement("li");
     const size = entry.size ? ` ${formatAmount(entry.size, state)}` : "";
-    item.textContent = withSuitGlyphs(`${STREET_LABELS[entry.street]}: ${seatLabel(entry.seat, state.config.heroSeat)} ${entry.action}${size}`);
+    item.textContent = withSuitGlyphs(`${STREET_LABELS[entry.street]}: ${seatLabel(entry.seat, state.config.heroSeat, state)} ${entry.action}${size}`);
     log.append(item);
   });
 
@@ -877,7 +877,7 @@ function preflopResultText(state) {
   }
 
   if (preflop.result === "winner") {
-    return `${seatLabel(preflop.winnerSeat, state.config.heroSeat)} wins preflop uncontested.`;
+    return `${seatLabel(preflop.winnerSeat, state.config.heroSeat, state)} wins preflop uncontested.`;
   }
 
   return "Preflop complete - continue to flop.";
@@ -899,7 +899,7 @@ function postflopResultText(state) {
   }
 
   if (postflop.result === "winner") {
-    return `${seatLabel(postflop.winnerSeat, state.config.heroSeat)} wins the ${postflop.street} uncontested.`;
+    return `${seatLabel(postflop.winnerSeat, state.config.heroSeat, state)} wins the ${postflop.street} uncontested.`;
   }
 
   if (postflop.result === "showdown") {
@@ -1051,8 +1051,20 @@ function createMeta(label, value) {
   return wrapper;
 }
 
-function seatLabel(seat, heroSeat) {
-  return seat === heroSeat ? "Hero" : `Seat ${seat + 1}`;
+function seatLabel(seat, heroSeat, state = null) {
+  if (seat === heroSeat) {
+    return activeHeroName(state) || "Hero";
+  }
+
+  return `Seat ${seat + 1}`;
+}
+
+function activeHeroName(state) {
+  if (!state?.activeHeroId) {
+    return "";
+  }
+
+  return state.heroes?.find((hero) => hero.id === state.activeHeroId)?.name || "";
 }
 
 function rosterPlayerForSeat(state, seat) {

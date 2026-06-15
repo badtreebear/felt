@@ -155,3 +155,42 @@
 [2m10:35:12 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mFailed to load RFI vs 3-bet chart. ReferenceError: Cannot access 'vsThreeBetChart' before initialization
     at loadVsThreeBetChart (http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433312235:98:45)
     at http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433312235:13:65
+[2m5:14:33 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > Object.dealNewHand src/main.js?t=1781500472226:146:5
+ > src/main.js?t=1781500472226:822:9
+
+[2m5:14:51 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > Object.dealNewHand src/main.js?t=1781500490619:146:5
+ > src/main.js?t=1781500490619:957:9
+
+[2m5:14:59 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > Object.dealNewHand src/main.js?t=1781500498738:146:5
+ > src/main.js?t=1781500498738:967:9
+
+[2m5:15:00 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > advanceAutoAction src/main.js?t=1781500498738:866:3
+ > src/main.js?t=1781500498738:847:5
+
+[2m5:15:10 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > Object.dealNewHand src/main.js?t=1781500509070:146:5
+ > src/main.js?t=1781500509070:968:9
+
+[2m5:15:12 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > advanceAutoAction src/main.js?t=1781500509070:867:3
+ > src/main.js?t=1781500509070:848:5
+
+[2m5:15:13 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > advanceAutoAction src/main.js?t=1781500509070:867:3
+ > src/main.js?t=1781500509070:848:5
+
+[2m5:15:15 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: recordCurrentHandIfTerminal is not defined
+[39m > advanceAutoAction src/main.js?t=1781500509070:867:3
+ > src/main.js?t=1781500509070:848:5
+
+[2m5:16:19 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mReferenceError[22m: activeHero is not defined
+[39m > createHeroControl src/ui/controls.js?t=1781500578371:128:18
+ > renderControls src/ui/controls.js?t=1781500578371:18:19
+ > src/main.js?t=1781500578371:1088:3
+ > subscribe src/state.js?t=1781500430977:101:3
+ > src/main.js?t=1781500578371:1087:1
+

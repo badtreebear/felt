@@ -1,4 +1,4 @@
-import { createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Upload, Users } from "lucide";
+import { BarChart3, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Trash2, Upload, Users } from "lucide";
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
 import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig } from "./coach/config.js";
 import { buildChatMessages, buildExplainMessages, buildHandReviewMessages } from "./coach/prompts.js";
@@ -20,9 +20,25 @@ import {
 } from "./engine/postflop-action.js";
 import { requiredEquity } from "./engine/potodds.js";
 import { state, subscribe, updateState } from "./state.js";
+import {
+  createHero,
+  deleteHeroAndHands,
+  ensureDefaultHero,
+  heroExportPayload,
+  importedHeroEntries,
+  loadActiveHeroId,
+  loadHeroes,
+  mergeImportedHeroes,
+  saveActiveHeroId,
+  saveHero,
+} from "./heroes/store.js";
 import { applySeatAssignment } from "./roster/seat-assignments.js";
 import { createPlayer, loadRoster, mergeImportedRoster, normalizePlayer, saveRoster } from "./roster/store.js";
 import { resolveSeatProfilesForHand } from "./roster/weights.js";
+import { scorePreflopDecision } from "./tracker/preflop-leaks.js";
+import { buildHandRecord, createHandRecordId } from "./tracker/recording.js";
+import { loadHandsForHero, saveHandRecord } from "./tracker/store.js";
+import { summarizeHands } from "./tracker/stats.js";
 import { renderControls } from "./ui/controls.js";
 import { renderTable } from "./ui/table.js";
 import "./ui/theme.css";
@@ -57,6 +73,8 @@ let equityWorker = null;
 let equityRequestId = 0;
 let autoActionTimer = null;
 let coachRequestId = 0;
+let trackerRequestId = 0;
+const recordedHandIds = new Set();
 
 state.roster = loadRoster();
 state.coach.config = loadCoachConfig();
@@ -101,6 +119,8 @@ const actions = {
       draft.hand = hand;
       draft.hand.startingStacks = { ...startingStacks };
       draft.hand.postflop = null;
+      draft.hand.trackerRecordId = draft.activeHeroId ? createHandRecordId(draft.activeHeroId, hand.seed) : "";
+      draft.hand.trackerDecisions = [];
       draft.ui.awaitingStart = false;
       draft.ui.revealVillains = false;
       draft.ui.openPopover = null;
@@ -123,6 +143,7 @@ const actions = {
 
     queueEquitySimulation();
     scheduleAutoAction();
+    void recordCurrentHandIfTerminal();
   },
   replayHand() {
     if (state.hand.seed) {
@@ -151,6 +172,8 @@ const actions = {
       draft.hand.actionLog = [];
       draft.hand.seed = "";
       draft.hand.startingStacks = {};
+      draft.hand.trackerRecordId = "";
+      draft.hand.trackerDecisions = [];
       draft.ui.awaitingStart = true;
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
@@ -166,6 +189,141 @@ const actions = {
     // Top the hero back up to the starting stack (others keep their stacks).
     const heroSeat = Math.floor(state.config.players / 2);
     actions.dealNewHand(undefined, { stackOverrides: { [heroSeat]: state.config.stack } });
+  },
+  async heroAdd({ name } = {}) {
+    const hero = createHero({ name });
+
+    if (!hero) {
+      return null;
+    }
+
+    await saveHero(hero);
+    saveActiveHeroId(hero.id);
+    updateState((draft) => {
+      draft.heroes = [...draft.heroes, hero];
+      draft.activeHeroId = hero.id;
+      draft.tracker.selectedLeakType = "";
+      draft.ui.trackerImportStatus = null;
+    });
+    await refreshTrackerData(hero.id);
+    return hero;
+  },
+  selectHero(id) {
+    if (!state.heroes.some((hero) => hero.id === id)) {
+      return;
+    }
+
+    saveActiveHeroId(id);
+    updateState((draft) => {
+      draft.activeHeroId = id;
+      draft.tracker.selectedLeakType = "";
+      draft.ui.trackerImportStatus = null;
+      if (draft.hand.seed) {
+        draft.hand.trackerRecordId = createHandRecordId(id, draft.hand.seed);
+        draft.hand.trackerDecisions = [];
+      }
+    });
+    void refreshTrackerData(id);
+  },
+  async heroRename(id, name) {
+    const cleanName = String(name || "").trim();
+    const hero = state.heroes.find((candidate) => candidate.id === id);
+
+    if (!hero || !cleanName) {
+      return null;
+    }
+
+    const saved = await saveHero({ ...hero, name: cleanName });
+    updateState((draft) => {
+      draft.heroes = draft.heroes.map((candidate) => (candidate.id === id ? saved : candidate));
+    });
+    return saved;
+  },
+  async heroRemove(id) {
+    if (!id) {
+      return;
+    }
+
+    await deleteHeroAndHands(id);
+    let heroes = state.heroes.filter((hero) => hero.id !== id);
+    heroes = await ensureDefaultHero(heroes);
+    const activeHeroId = state.activeHeroId === id
+      ? heroes[0]?.id || ""
+      : state.activeHeroId;
+
+    saveActiveHeroId(activeHeroId);
+    updateState((draft) => {
+      draft.heroes = heroes;
+      draft.activeHeroId = activeHeroId;
+      draft.tracker.selectedLeakType = "";
+      draft.ui.trackerImportStatus = {
+        kind: "success",
+        message: "Hero deleted.",
+      };
+    });
+    await refreshTrackerData(activeHeroId);
+  },
+  setTrackerOpen(open) {
+    updateState((draft) => {
+      draft.ui.trackerOpen = open;
+    });
+  },
+  setTrackerLeak(leakType) {
+    updateState((draft) => {
+      draft.tracker.selectedLeakType = draft.tracker.selectedLeakType === leakType ? "" : leakType;
+    });
+  },
+  replayTrackerHand(seed) {
+    if (seed) {
+      actions.dealNewHand(seed);
+    }
+  },
+  heroExport({ includeHands = true } = {}) {
+    const hero = activeHero(state);
+    return heroExportPayload(hero, includeHands ? state.tracker.hands : []);
+  },
+  async heroImport(payload) {
+    const sourceHeroes = importedHeroEntries(payload);
+    const result = mergeImportedHeroes(state.heroes, payload);
+
+    if (!result.added) {
+      updateState((draft) => {
+        draft.ui.trackerImportStatus = {
+          kind: "error",
+          message: "Import failed. No valid hero found.",
+        };
+      });
+      return result;
+    }
+
+    const savedHeroes = [];
+    for (const hero of result.imported) {
+      savedHeroes.push(await saveHero(hero));
+    }
+
+    const importedHands = await importHandsForHeroes({
+      payload,
+      sourceHeroes,
+      importedHeroes: savedHeroes,
+    });
+    const activeHeroId = savedHeroes[0]?.id || state.activeHeroId;
+    saveActiveHeroId(activeHeroId);
+    updateState((draft) => {
+      draft.heroes = result.heroes;
+      draft.activeHeroId = activeHeroId;
+      draft.tracker.selectedLeakType = "";
+      draft.ui.trackerImportStatus = {
+        kind: "success",
+        message: `Imported ${savedHeroes.length} hero${savedHeroes.length === 1 ? "" : "es"} and ${importedHands} hand${importedHands === 1 ? "" : "s"}.`,
+      };
+    });
+    await refreshTrackerData(activeHeroId);
+    return result;
+  },
+  setTrackerImportStatus(trackerImportStatus) {
+    updateState((draft) => {
+      draft.ui.trackerImportStatus = trackerImportStatus;
+    });
   },
   rosterAdd({ name, profile = "standard" } = {}) {
     const player = createPlayer({ name, profile });
@@ -347,6 +505,7 @@ const actions = {
     });
     queueEquitySimulation();
     scheduleAutoAction();
+    void recordCurrentHandIfTerminal();
   },
   setRevealVillains(revealVillains) {
     updateState((draft) => {
@@ -628,10 +787,17 @@ const actions = {
     const autoActionLimit = autoActionLimitForState(state);
 
     updateState((draft) => {
+      const decision = scorePreflopDecision({
+        preflop: draft.hand.preflop,
+        action,
+      });
       const preflop = applyHeroPreflopAction(draft.hand.preflop, {
         action,
         raiseTo: cleanAmount(raiseTo ?? draft.ui.heroRaiseTo),
       }, { autoActionLimit });
+      if (decision) {
+        draft.hand.trackerDecisions = [...(draft.hand.trackerDecisions || []), decision];
+      }
       applyPreflopToDraft(draft, preflop);
       draft.hand.postflop = null;
       draft.ui.openPopover = null;
@@ -639,6 +805,7 @@ const actions = {
     });
     queueEquitySimulation();
     scheduleAutoAction();
+    void recordCurrentHandIfTerminal();
   },
   heroPostflopAction(action, betAmount) {
     clearAutoActionTimer();
@@ -656,8 +823,153 @@ const actions = {
     });
     queueEquitySimulation();
     scheduleAutoAction();
+    void recordCurrentHandIfTerminal();
   },
 };
+
+async function initializeTracker() {
+  updateState((draft) => {
+    draft.tracker.status = "loading";
+  });
+
+  try {
+    const heroes = await ensureDefaultHero(await loadHeroes());
+    const activeHeroId = saveActiveHeroId(loadActiveHeroId(heroes));
+
+    updateState((draft) => {
+      draft.heroes = heroes;
+      draft.activeHeroId = activeHeroId;
+    });
+    await refreshTrackerData(activeHeroId);
+  } catch (error) {
+    console.error("Failed to initialize tracker.", error);
+    updateState((draft) => {
+      draft.tracker.status = "error";
+      draft.ui.trackerImportStatus = {
+        kind: "error",
+        message: "Tracker storage failed to load.",
+      };
+    });
+  }
+}
+
+async function refreshTrackerData(heroId = state.activeHeroId) {
+  const requestId = trackerRequestId + 1;
+  trackerRequestId = requestId;
+
+  if (!heroId) {
+    updateState((draft) => {
+      draft.tracker.hands = [];
+      draft.tracker.summary = summarizeHands([]);
+      draft.tracker.status = "idle";
+    });
+    return;
+  }
+
+  updateState((draft) => {
+    draft.tracker.status = "loading";
+  });
+
+  try {
+    const hands = await loadHandsForHero(heroId);
+
+    updateState((draft) => {
+      if (requestId !== trackerRequestId || draft.activeHeroId !== heroId) {
+        return;
+      }
+
+      draft.tracker.hands = hands;
+      draft.tracker.summary = summarizeHands(hands);
+      draft.tracker.status = "idle";
+    });
+  } catch (error) {
+    console.error("Failed to load tracker hands.", error);
+    updateState((draft) => {
+      if (requestId !== trackerRequestId) {
+        return;
+      }
+
+      draft.tracker.status = "error";
+      draft.ui.trackerImportStatus = {
+        kind: "error",
+        message: "Tracker hands failed to load.",
+      };
+    });
+  }
+}
+
+async function recordCurrentHandIfTerminal() {
+  const record = buildHandRecord(state);
+
+  if (!record || recordedHandIds.has(record.id)) {
+    return;
+  }
+
+  recordedHandIds.add(record.id);
+
+  try {
+    await saveHandRecord(record);
+
+    if (record.heroId === state.activeHeroId) {
+      await refreshTrackerData(record.heroId);
+    }
+  } catch (error) {
+    recordedHandIds.delete(record.id);
+    console.error("Failed to record hand.", error);
+    updateState((draft) => {
+      draft.ui.trackerImportStatus = {
+        kind: "error",
+        message: "Hand tracker failed to save this hand.",
+      };
+    });
+  }
+}
+
+async function importHandsForHeroes({ payload, sourceHeroes, importedHeroes }) {
+  const hands = Array.isArray(payload?.hands) ? payload.hands : [];
+
+  if (!hands.length || !importedHeroes.length) {
+    return 0;
+  }
+
+  const heroIdMap = new Map();
+  sourceHeroes.forEach((sourceHero, index) => {
+    const imported = importedHeroes[index];
+
+    if (sourceHero?.id && imported?.id) {
+      heroIdMap.set(sourceHero.id, imported.id);
+    }
+  });
+
+  if (sourceHeroes.length === 1 && importedHeroes[0]) {
+    heroIdMap.set(sourceHeroes[0]?.id, importedHeroes[0].id);
+  }
+
+  let importedCount = 0;
+  for (const hand of hands) {
+    const heroId = heroIdMap.get(hand.heroId) || (importedHeroes.length === 1 ? importedHeroes[0].id : null);
+
+    if (!heroId || !hand?.seed) {
+      continue;
+    }
+
+    await saveHandRecord({
+      ...hand,
+      id: createHandRecordId(heroId, hand.seed),
+      heroId,
+      ts: Number(hand.ts) || Date.now(),
+    });
+    importedCount += 1;
+  }
+
+  return importedCount;
+}
+
+function activeHero(currentState) {
+  return currentState.heroes.find((hero) => hero.id === currentState.activeHeroId)
+    || currentState.heroes[0]
+    || null;
+}
 
 function scheduleAutoAction() {
   clearAutoActionTimer();
@@ -696,6 +1008,7 @@ function advanceAutoAction(autoActionLimit) {
   });
   queueEquitySimulation();
   scheduleAutoAction();
+  void recordCurrentHandIfTerminal();
 }
 
 function clearAutoActionTimer() {
@@ -785,6 +1098,8 @@ subscribe("*", () => {
       Download,
       Upload,
       Users,
+      BarChart3,
+      Trash2,
     },
   });
 });
@@ -796,13 +1111,18 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-actions.dealNewHand();
+initializeApp();
 
-// If the coach was already enabled + configured, test the saved connection on
-// load so it shows connected without a manual click (a health check, not a
-// coaching call).
-if (isCoachConfigured(state.coach.config)) {
-  actions.testCoachConnection();
+async function initializeApp() {
+  await initializeTracker();
+  actions.dealNewHand();
+
+  // If the coach was already enabled + configured, test the saved connection on
+  // load so it shows connected without a manual click (a health check, not a
+  // coaching call).
+  if (isCoachConfigured(state.coach.config)) {
+    actions.testCoachConnection();
+  }
 }
 
 function renderRangeAlert(container) {
