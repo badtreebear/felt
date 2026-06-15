@@ -1,5 +1,5 @@
 import profiles from "../data/profiles.json";
-import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+import rfiChart from "../data/ranges/default-rfi-9max.json";
 import { RANKS } from "./deck.js";
 import { positionToRfiLabel } from "./positions.js";
 import { expandPositionRange, handKeyToCombos, RFI_POSITIONS_9MAX, validateRfiChart } from "./ranges.js";
@@ -33,7 +33,7 @@ export const PLAYER_MODEL_CONSTANTS = {
   },
 };
 
-const chart = validateRfiChart(pokerCoachingRfiChart);
+const chart = validateRfiChart(rfiChart);
 const handRanking = createHandRanking();
 const handStrengthIndex = new Map(handRanking.map((entry, index) => [entry.hand, index]));
 

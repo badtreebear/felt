@@ -6,8 +6,8 @@ import {
   validateVsRfiChart,
 } from "../../engine/ranges.js";
 import { getOpeningRange } from "./opening-ranges.js";
-import pokerCoachingVsThreeBetChart from "./pokercoaching-vs3bet-9max.json";
-import pokerCoachingVsRfiChart from "./pokercoaching-vsrfi-9max.json";
+import vsThreeBetChartData from "./default-vs3bet-9max.json";
+import vsRfiChartData from "./default-vsrfi-9max.json";
 
 const { chart: vsRfiChart, error: vsRfiChartError } = loadVsRfiChart();
 const { chart: vsThreeBetChart, error: vsThreeBetChartError } = loadVsThreeBetChart();
@@ -86,18 +86,18 @@ export function getVsThreeBetRangeLoadError() {
 
 function loadVsRfiChart() {
   try {
-    return { chart: validateVsRfiChart(pokerCoachingVsRfiChart), error: null };
+    return { chart: validateVsRfiChart(vsRfiChartData), error: null };
   } catch (error) {
-    console.error("Failed to load PokerCoaching Facing RFI chart.", error);
+    console.error("Failed to load Facing-RFI chart.", error);
     return { chart: null, error };
   }
 }
 
 function loadVsThreeBetChart() {
   try {
-    return { chart: validateVsThreeBetChart(pokerCoachingVsThreeBetChart), error: null };
+    return { chart: validateVsThreeBetChart(vsThreeBetChartData), error: null };
   } catch (error) {
-    console.error("Failed to load PokerCoaching RFI vs 3-bet chart.", error);
+    console.error("Failed to load RFI vs 3-bet chart.", error);
     return { chart: null, error };
   }
 }

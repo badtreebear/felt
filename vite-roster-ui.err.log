@@ -1,0 +1,157 @@
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../data/ranges/pokercoaching-rfi-9max.json" from "src/engine/player-model.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/engine/player-model.js[39m:2:35
+[33m  1  |  import profiles from "../data/profiles.json";
+  2  |  import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+     |                                     ^
+  3  |  import { RANKS } from "./deck.js";
+  4  |  import { positionToRfiLabel } from "./positions.js";[39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../data/ranges/pokercoaching-rfi-9max.json" from "src/engine/player-model.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/engine/player-model.js[39m:2:35
+[33m  1  |  import profiles from "../data/profiles.json";
+  2  |  import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+     |                                     ^
+  3  |  import { RANKS } from "./deck.js";
+  4  |  import { positionToRfiLabel } from "./positions.js";[39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../data/ranges/pokercoaching-rfi-9max.json" from "src/engine/player-model.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/engine/player-model.js[39m:2:35
+[33m  1  |  import profiles from "../data/profiles.json";
+  2  |  import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+     |                                     ^
+  3  |  import { RANKS } from "./deck.js";
+  4  |  import { positionToRfiLabel } from "./positions.js";[39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../data/ranges/pokercoaching-rfi-9max.json" from "src/engine/player-model.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/engine/player-model.js[39m:2:35
+[33m  1  |  import profiles from "../data/profiles.json";
+  2  |  import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+     |                                     ^
+  3  |  import { RANKS } from "./deck.js";
+  4  |  import { positionToRfiLabel } from "./positions.js";[39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../data/ranges/pokercoaching-rfi-9max.json" from "src/engine/player-model.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/engine/player-model.js[39m:2:35
+[33m  1  |  import profiles from "../data/profiles.json";
+  2  |  import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+     |                                     ^
+  3  |  import { RANKS } from "./deck.js";
+  4  |  import { positionToRfiLabel } from "./positions.js";[39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "../data/ranges/pokercoaching-rfi-9max.json" from "src/engine/player-model.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/engine/player-model.js[39m:2:35
+[33m  1  |  import profiles from "../data/profiles.json";
+  2  |  import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+     |                                     ^
+  3  |  import { RANKS } from "./deck.js";
+  4  |  import { positionToRfiLabel } from "./positions.js";[39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./pokercoaching-vsrfi-9max.json" from "src/data/ranges/contextual-ranges.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/data/ranges/contextual-ranges.js[39m:10:37
+[33m  8  |  import { getOpeningRange } from "./opening-ranges.js";
+  9  |  import pokerCoachingVsThreeBetChart from "./pokercoaching-vs3bet-9max.json";
+  10 |  import pokerCoachingVsRfiChart from "./pokercoaching-vsrfi-9max.json";
+     |                                       ^
+  11 |  
+  12 |  const { chart: vsRfiChart, error: vsRfiChartError } = loadVsRfiChart();[39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./pokercoaching-rfi-6max.json" from "src/data/ranges/opening-ranges.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/data/ranges/opening-ranges.js[39m:8:39
+[33m  6  |    validateRfiChart,
+  7  |  } from "../../engine/ranges.js";
+  8  |  import pokerCoachingRfi6MaxChart from "./pokercoaching-rfi-6max.json";
+     |                                         ^
+  9  |  import pokerCoachingRfiChart from "./pokercoaching-rfi-9max.json";
+  10 |  [39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./pokercoaching-rfi-6max.json" from "src/data/ranges/opening-ranges.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/data/ranges/opening-ranges.js[39m:8:39
+[33m  6  |    validateRfiChart,
+  7  |  } from "../../engine/ranges.js";
+  8  |  import pokerCoachingRfi6MaxChart from "./pokercoaching-rfi-6max.json";
+     |                                         ^
+  9  |  import pokerCoachingRfiChart from "./pokercoaching-rfi-9max.json";
+  10 |  [39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./pokercoaching-rfi-6max.json" from "src/data/ranges/opening-ranges.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/data/ranges/opening-ranges.js[39m:8:39
+[33m  6  |    validateRfiChart,
+  7  |  } from "../../engine/ranges.js";
+  8  |  import pokerCoachingRfi6MaxChart from "./pokercoaching-rfi-6max.json";
+     |                                         ^
+  9  |  import pokerCoachingRfiChart from "./pokercoaching-rfi-9max.json";
+  10 |  [39m
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./pokercoaching-rfi-6max.json" from "src/data/ranges/opening-ranges.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/data/ranges/opening-ranges.js[39m:8:39
+[33m  6  |    validateRfiChart,
+  7  |  } from "../../engine/ranges.js";
+  8  |  import pokerCoachingRfi6MaxChart from "./pokercoaching-rfi-6max.json";
+     |                                         ^
+  9  |  import pokerCoachingRfiChart from "./pokercoaching-rfi-9max.json";
+  10 |  [39m
+      at TransformPluginContext._formatLog (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30602:39)
+      at TransformPluginContext.error (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30599:14)
+      at normalizeUrl (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27842:18)
+      at async file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27905:30
+      at async Promise.all (index 2)
+      at async TransformPluginContext.transform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27873:4)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30387:14)
+      at async loadAndTransform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:24646:26)
+      at async viteTransformMiddleware (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:24440:20)
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "../data/ranges/pokercoaching-rfi-9max.json" from "src/engine/player-model.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/engine/player-model.js[39m:2:35
+[33m  1  |  import profiles from "../data/profiles.json";
+  2  |  import pokerCoachingRfiChart from "../data/ranges/pokercoaching-rfi-9max.json";
+     |                                     ^
+  3  |  import { RANKS } from "./deck.js";
+  4  |  import { positionToRfiLabel } from "./positions.js";[39m
+      at TransformPluginContext._formatLog (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30602:39)
+      at TransformPluginContext.error (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30599:14)
+      at normalizeUrl (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27842:18)
+      at async file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27905:30
+      at async Promise.all (index 1)
+      at async TransformPluginContext.transform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27873:4)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30387:14)
+      at async loadAndTransform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:24646:26)
+      at async viteTransformMiddleware (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:24440:20)
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31mInternal server error: Failed to resolve import "./pokercoaching-vs3bet-9max.json" from "src/data/ranges/contextual-ranges.js". Does the file exist?[39m
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/data/ranges/contextual-ranges.js[39m:9:42
+[33m  7  |  } from "../../engine/ranges.js";
+  8  |  import { getOpeningRange } from "./opening-ranges.js";
+  9  |  import pokerCoachingVsThreeBetChart from "./pokercoaching-vs3bet-9max.json";
+     |                                            ^
+  10 |  import pokerCoachingVsRfiChart from "./pokercoaching-vsrfi-9max.json";
+  11 |  [39m
+      at TransformPluginContext._formatLog (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30602:39)
+      at TransformPluginContext.error (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30599:14)
+      at normalizeUrl (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27842:18)
+      at async file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27905:30
+      at async Promise.all (index 3)
+      at async TransformPluginContext.transform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:27873:4)
+      at async EnvironmentPluginContainer.transform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:30387:14)
+      at async loadAndTransform (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:24646:26)
+      at async viteTransformMiddleware (file:///C:/Users/jason/felt/node_modules/vite/dist/node/chunks/node.js:24440:20)
+[2m9:45:18 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Failed to resolve import "./pokercoaching-rfi-6max.json" from "src/data/ranges/opening-ranges.js". Does the file exist?
+  Plugin: [35mvite:import-analysis[39m
+  File: [36mC:/Users/jason/felt/src/data/ranges/opening-ranges.js[39m:8:39
+[33m  6  |    validateRfiChart,
+  7  |  } from "../../engine/ranges.js";
+  8  |  import pokerCoachingRfi6MaxChart from "./pokercoaching-rfi-6max.json";
+     |                                         ^
+  9  |  import pokerCoachingRfiChart from "./pokercoaching-rfi-9max.json";
+  10 |  [39m
+[2m10:33:36 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled error] [1mSyntaxError[22m: Identifier 'vsRfiChart' has already been declared
+[39m
+[2m10:35:10 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mFailed to load Facing-RFI chart. ReferenceError: Cannot access 'vsRfiChart' before initialization
+    at loadVsRfiChart (http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433310333:89:40)
+    at http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433310333:12:55
+[2m10:35:10 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mFailed to load RFI vs 3-bet chart. ReferenceError: Cannot access 'vsThreeBetChart' before initialization
+    at loadVsThreeBetChart (http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433310333:98:45)
+    at http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433310333:13:65
+[2m10:35:12 pm[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mFailed to load RFI vs 3-bet chart. ReferenceError: Cannot access 'vsThreeBetChart' before initialization
+    at loadVsThreeBetChart (http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433312235:98:45)
+    at http://127.0.0.1:5174/src/data/ranges/contextual-ranges.js?t=1781433312235:13:65

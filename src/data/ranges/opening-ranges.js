@@ -5,24 +5,24 @@ import {
   rangeToGrid,
   validateRfiChart,
 } from "../../engine/ranges.js";
-import pokerCoachingRfi6MaxChart from "./pokercoaching-rfi-6max.json";
-import pokerCoachingRfiChart from "./pokercoaching-rfi-9max.json";
+import rfi6MaxChart from "./default-rfi-6max.json";
+import rfiChart from "./default-rfi-9max.json";
 
 const OPENING_CHARTS = {
-  "6max": pokerCoachingRfi6MaxChart,
-  "9max": pokerCoachingRfiChart,
+  "6max": rfi6MaxChart,
+  "9max": rfiChart,
 };
 
 const VALIDATED_OPENING_CHARTS = {
-  "6max": loadOpeningChart(pokerCoachingRfi6MaxChart, {
+  "6max": loadOpeningChart(rfi6MaxChart, {
     positions: ["LJ", "HJ", "CO", "BTN", "SB"],
   }),
-  "9max": loadOpeningChart(pokerCoachingRfiChart),
+  "9max": loadOpeningChart(rfiChart),
 };
 
 export function getOpeningRange({ players, position }) {
   const bucket = rangeBucketForPlayers(players);
-  const sourceChart = OPENING_CHARTS[bucket] || pokerCoachingRfiChart;
+  const sourceChart = OPENING_CHARTS[bucket] || rfiChart;
   const { chart, error: chartError } = VALIDATED_OPENING_CHARTS[bucket] || VALIDATED_OPENING_CHARTS["9max"];
   const rangePosition = chart?.positions?.[position] ? position : positionToRfiLabel(position);
 
@@ -75,7 +75,7 @@ function loadOpeningChart(chart, options = {}) {
   try {
     return { chart: validateRfiChart(chart, options), error: null };
   } catch (error) {
-    console.error("Failed to load PokerCoaching RFI chart.", error);
+    console.error("Failed to load RFI chart.", error);
     return { chart: null, error };
   }
 }
