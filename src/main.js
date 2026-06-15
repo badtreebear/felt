@@ -1,8 +1,21 @@
 import { BarChart3, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Trash2, Upload, Users } from "lucide";
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
 import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig } from "./coach/config.js";
-import { buildChatMessages, buildExplainMessages, buildHandReviewMessages } from "./coach/prompts.js";
+import {
+  buildChatMessages,
+  buildExplainMessages,
+  buildHandReviewMessages,
+  buildTrackerLeakMessages,
+  buildTrackerSummaryMessages,
+} from "./coach/prompts.js";
 import { buildCoachSnapshot } from "./coach/snapshot.js";
+import {
+  buildTrackerLeakSnapshot,
+  buildTrackerSummarySnapshot,
+  TRACKER_SUMMARY_TOPIC,
+  trackerExampleTopic,
+  trackerLeakTopic,
+} from "./coach/tracker.js";
 import { boardForStreet, dealHoldemHand, nextStreet, STREET_LABELS } from "./engine/deck.js";
 import { getOpeningRangeLoadError } from "./data/ranges/opening-ranges.js";
 import { callVerdict, evCall } from "./engine/ev.js";
@@ -625,38 +638,25 @@ const actions = {
     });
   },
   async requestCoachExplain(topic) {
-    if (!isCoachReachable(state.coach)) {
-      updateState((draft) => markCoachOffline(draft));
-      return;
-    }
-
-    const requestId = nextCoachRequestId();
-    const config = { ...state.coach.config };
     const snapshot = buildCoachSnapshot(state);
     const messages = buildExplainMessages({ snapshot, topic });
 
-    updateState((draft) => {
-      draft.coach.callCount += 1;
-      draft.coach.explain[topic] = { status: "loading", content: "", error: "" };
-    });
+    await requestCoachMessages({ topic, messages, maxTokens: 320 });
+  },
+  async requestTrackerCoachSummary() {
+    const snapshot = buildTrackerSummarySnapshot(state);
+    const messages = buildTrackerSummaryMessages({ snapshot });
 
-    const result = await coachChatCompletion(config, messages, { maxTokens: 320 });
+    await requestCoachMessages({ topic: TRACKER_SUMMARY_TOPIC, messages, maxTokens: 260 });
+  },
+  async requestTrackerCoachLeak(leakType, exampleId = "") {
+    const snapshot = buildTrackerLeakSnapshot(state, { leakType, exampleId });
+    const topic = snapshot.example
+      ? trackerExampleTopic(snapshot.example)
+      : trackerLeakTopic(leakType);
+    const messages = buildTrackerLeakMessages({ snapshot });
 
-    updateState((draft) => {
-      if (requestId !== coachRequestId) {
-        return;
-      }
-
-      if (!result.ok) {
-        draft.coach.explain[topic] = { status: "idle", content: "", error: "" };
-        markCoachOffline(draft, result.error);
-        return;
-      }
-
-      draft.coach.explain[topic] = { status: "done", content: sanitizeCoachContent(result.content), error: "" };
-      draft.coach.status = "reachable";
-      draft.coach.lastError = "";
-    });
+    await requestCoachMessages({ topic, messages, maxTokens: 260 });
   },
   setCoachChatOpen(chatOpen) {
     updateState((draft) => {
@@ -1051,6 +1051,39 @@ function markCoachOffline(draft, error = "Coach offline - trainer fully function
 function nextCoachRequestId() {
   coachRequestId += 1;
   return coachRequestId;
+}
+
+async function requestCoachMessages({ topic, messages, maxTokens }) {
+  if (!isCoachReachable(state.coach)) {
+    updateState((draft) => markCoachOffline(draft));
+    return;
+  }
+
+  const requestId = nextCoachRequestId();
+  const config = { ...state.coach.config };
+
+  updateState((draft) => {
+    draft.coach.callCount += 1;
+    draft.coach.explain[topic] = { status: "loading", content: "", error: "" };
+  });
+
+  const result = await coachChatCompletion(config, messages, { maxTokens });
+
+  updateState((draft) => {
+    if (requestId !== coachRequestId) {
+      return;
+    }
+
+    if (!result.ok) {
+      draft.coach.explain[topic] = { status: "idle", content: "", error: "" };
+      markCoachOffline(draft, result.error);
+      return;
+    }
+
+    draft.coach.explain[topic] = { status: "done", content: sanitizeCoachContent(result.content), error: "" };
+    draft.coach.status = "reachable";
+    draft.coach.lastError = "";
+  });
 }
 
 // Belt-and-suspenders: strip any LaTeX/markdown-math the model emits despite the

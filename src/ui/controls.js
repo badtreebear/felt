@@ -1,4 +1,6 @@
 import { STREET_LABELS } from "../engine/deck.js";
+import { isCoachConfigured, isCoachReachable } from "../coach/config.js";
+import { TRACKER_SUMMARY_TOPIC, trackerExampleTopic } from "../coach/tracker.js";
 import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { baseProfilePercent } from "../roster/weights.js";
@@ -312,6 +314,11 @@ function createTrackerPanel(state, actions) {
   header.append(title, createHeroFileControls(state, actions));
   section.append(header, createStatsStrip(state.tracker.summary));
 
+  const trackerCoach = createTrackerCoachSummary(state, actions);
+  if (trackerCoach) {
+    section.append(trackerCoach);
+  }
+
   if (state.ui.trackerImportStatus?.message) {
     const status = document.createElement("p");
     status.className = "tracker-status";
@@ -369,7 +376,7 @@ function createTrackerPanel(state, actions) {
     item.append(button);
 
     if (state.tracker.selectedLeakType === leak.leakType) {
-      item.append(createLeakExamples(leak.examples || [], actions));
+      item.append(createLeakExamples(leak.examples || [], leak.leakType, state, actions));
     }
 
     list.append(item);
@@ -377,6 +384,41 @@ function createTrackerPanel(state, actions) {
 
   section.append(list);
   return section;
+}
+
+function createTrackerCoachSummary(state, actions) {
+  if (!isCoachConfigured(state.coach.config)) {
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "tracker-coach";
+
+  if (!isCoachReachable(state.coach)) {
+    const offline = document.createElement("p");
+    offline.className = "tracker-coach__status";
+    offline.textContent = "Coach offline - trainer fully functional.";
+    wrapper.append(offline);
+    return wrapper;
+  }
+
+  const explain = state.coach.explain?.[TRACKER_SUMMARY_TOPIC] || { status: "idle", content: "" };
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "tracker-coach__button";
+  button.disabled = explain.status === "loading" || !state.tracker.summary?.handsTracked;
+  button.textContent = explain.status === "loading" ? "Coach thinking..." : "Explain my leaks";
+  button.addEventListener("click", () => actions.requestTrackerCoachSummary());
+  wrapper.append(button);
+
+  if (explain.content) {
+    const response = document.createElement("p");
+    response.className = "coach-response";
+    response.textContent = explain.content;
+    wrapper.append(response);
+  }
+
+  return wrapper;
 }
 
 function createHeroFileControls(state, actions) {
@@ -486,7 +528,7 @@ function createStatsStrip(summary) {
   return strip;
 }
 
-function createLeakExamples(examples, actions) {
+function createLeakExamples(examples, leakType, state, actions) {
   const list = document.createElement("ul");
   list.className = "tracker-examples";
 
@@ -501,11 +543,50 @@ function createLeakExamples(examples, actions) {
     replay.textContent = "Replay";
     replay.addEventListener("click", () => actions.replayTrackerHand(example.seed));
 
-    item.append(text, replay);
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "tracker-example__actions";
+    actionsRow.append(replay);
+
+    const explain = createTrackerExampleCoachAction({ example, leakType, state, actions });
+    if (explain) {
+      actionsRow.append(explain);
+    }
+
+    item.append(text, actionsRow);
+
+    const topic = trackerExampleTopic(example);
+    const response = state.coach.explain?.[topic]?.content;
+    if (response) {
+      const coachResponse = document.createElement("p");
+      coachResponse.className = "coach-response tracker-example__response";
+      coachResponse.textContent = response;
+      item.append(coachResponse);
+    }
+
     list.append(item);
   });
 
   return list;
+}
+
+function createTrackerExampleCoachAction({ example, leakType, state, actions }) {
+  if (!isCoachConfigured(state.coach.config)) {
+    return null;
+  }
+
+  const topic = trackerExampleTopic(example);
+  const explain = state.coach.explain?.[topic] || { status: "idle", content: "" };
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "tracker-example__explain";
+  button.disabled = explain.status === "loading" || !isCoachReachable(state.coach);
+  button.textContent = !isCoachReachable(state.coach)
+    ? "Coach offline"
+    : explain.status === "loading"
+      ? "Coach thinking..."
+      : "Explain this";
+  button.addEventListener("click", () => actions.requestTrackerCoachLeak(leakType, example.id || example.seed));
+  return button;
 }
 
 function buildTypeSelect(value, { excludeIds = [] } = {}) {

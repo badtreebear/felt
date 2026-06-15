@@ -3,6 +3,8 @@ import {
   buildChatMessages,
   buildExplainMessages,
   buildHandReviewMessages,
+  buildTrackerLeakMessages,
+  buildTrackerSummaryMessages,
 } from "../src/coach/prompts.js";
 
 const snapshot = {
@@ -54,5 +56,36 @@ describe("coach prompts", () => {
     expect(combined).toContain("If the hand is still in progress");
     expect(combined).toContain("Reference seed prompt-seed");
     expect(combined).not.toMatch(/calculate/i);
+  });
+
+  it("builds tracker summary prompts with a compact coaching budget", () => {
+    const messages = buildTrackerSummaryMessages({
+      snapshot: {
+        hero: "Jason",
+        stats: { handsTracked: 12, vpip: 0.42, pfr: 0.18, netBb: -14 },
+        leaks: [{ leakType: "defended too wide", count: 3, recommended: "fold" }],
+      },
+    });
+    const combined = messages.map((message) => message.content).join("\n");
+
+    expect(combined).toContain("Tracker snapshot");
+    expect(combined).toContain("Explain my tracker leaks");
+    expect(combined).toContain("under about 250 words");
+    expect(combined).toContain("defended too wide");
+  });
+
+  it("builds specific tracker leak prompts without asking the model to recompute numbers", () => {
+    const messages = buildTrackerLeakMessages({
+      snapshot: {
+        leak: { leakType: "called -EV", count: 1, recommended: "fold" },
+        decision: { heroAction: "call", recommended: "fold", evCall: -3.2 },
+      },
+    });
+    const combined = messages.map((message) => message.content).join("\n");
+
+    expect(combined).toContain("Tracker leak snapshot");
+    expect(combined).toContain("Explain this tracked leak or hand");
+    expect(combined).toContain("Do not recompute odds");
+    expect(combined).toContain('"evCall": -3.2');
   });
 });

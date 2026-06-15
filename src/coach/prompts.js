@@ -60,9 +60,39 @@ export function buildHandReviewMessages({ snapshot }) {
   ];
 }
 
-function systemMessage(snapshot) {
+export function buildTrackerSummaryMessages({ snapshot }) {
+  return [
+    systemMessage(snapshot, "Tracker snapshot"),
+    {
+      role: "user",
+      content: [
+        "Explain my tracker leaks in plain language for an improving home-game player.",
+        "Use the stats strip and leak list as authoritative.",
+        "Say what each leak means, which one to fix first, and one practical adjustment.",
+        "Keep it under about 250 words.",
+      ].join(" "),
+    },
+  ];
+}
+
+export function buildTrackerLeakMessages({ snapshot }) {
+  return [
+    systemMessage(snapshot, "Tracker leak snapshot"),
+    {
+      role: "user",
+      content: [
+        "Explain this tracked leak or hand in plain language.",
+        "Use the cards, position, action log, recommended action, and any EV numbers in the snapshot as authoritative.",
+        "Explain why the shown line was a mistake and what the better line is.",
+        "Do not recompute odds or invent missing numbers.",
+      ].join(" "),
+    },
+  ];
+}
+
+function systemMessage(snapshot, heading = "Current hand snapshot") {
   return {
     role: "system",
-    content: `${COACH_SYSTEM_PROMPT}\n\nCurrent hand snapshot:\n${JSON.stringify(snapshot, null, 2)}`,
+    content: `${COACH_SYSTEM_PROMPT}\n\n${heading}:\n${JSON.stringify(snapshot, null, 2)}`,
   };
 }

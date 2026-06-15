@@ -743,6 +743,34 @@ input:focus-visible {
   flex-wrap: wrap;
 }
 
+.tracker-coach {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.tracker-coach__status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.tracker-coach__button {
+  min-height: 34px;
+  border: 1px solid rgba(201, 162, 39, 0.42);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: #fff9e6;
+  background: rgba(201, 162, 39, 0.14);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.tracker-coach__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
 .tracker-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
@@ -847,6 +875,14 @@ input:focus-visible {
   font-size: 0.82rem;
 }
 
+.tracker-example__actions {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .tracker-examples span {
   overflow-wrap: anywhere;
 }
@@ -860,6 +896,15 @@ input:focus-visible {
   background: rgba(201, 162, 39, 0.14);
   cursor: pointer;
   font-weight: 800;
+}
+
+.tracker-examples button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.tracker-example__response {
+  grid-column: 1 / -1;
 }
 
 .roster-manager h3 {

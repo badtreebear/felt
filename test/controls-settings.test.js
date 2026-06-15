@@ -39,6 +39,53 @@ describe("settings cog controls", () => {
 
     expect(calls).toContainEqual(["setSettingsOpen", false]);
   });
+
+  it("gates tracker coach buttons on configured and reachable coach state", () => {
+    const unconfigured = document.createElement("div");
+
+    renderControls(unconfigured, sampleState({
+      ui: { trackerOpen: true },
+      tracker: trackerFixture(),
+    }), actionSpy());
+
+    expect(textIncludes(unconfigured, "Explain my leaks")).toBe(false);
+
+    const offline = document.createElement("div");
+    renderControls(offline, sampleState({
+      ui: { trackerOpen: true },
+      tracker: trackerFixture(),
+      coach: {
+        config: {
+          enabled: true,
+          baseUrl: "http://localhost:4000/v1",
+          model: "coach-model",
+          apiKey: "",
+        },
+        status: "unreachable",
+      },
+    }), actionSpy());
+
+    expect(textIncludes(offline, "Coach offline - trainer fully functional.")).toBe(true);
+    expect(textIncludes(offline, "Explain my leaks")).toBe(false);
+
+    const reachable = document.createElement("div");
+    renderControls(reachable, sampleState({
+      ui: { trackerOpen: true },
+      tracker: trackerFixture({ selectedLeakType: "defended too wide" }),
+      coach: {
+        config: {
+          enabled: true,
+          baseUrl: "http://localhost:4000/v1",
+          model: "coach-model",
+          apiKey: "",
+        },
+        status: "reachable",
+      },
+    }), actionSpy());
+
+    expect(textIncludes(reachable, "Explain my leaks")).toBe(true);
+    expect(textIncludes(reachable, "Explain this")).toBe(true);
+  });
 });
 
 function sampleState(overrides = {}) {
@@ -134,6 +181,48 @@ function actionSpy(calls = []) {
       calls.push([String(prop), ...args]);
     },
   });
+}
+
+function trackerFixture(overrides = {}) {
+  return {
+    hands: [{
+      id: "hand-1",
+      seed: "seed-1",
+      heroSeat: 1,
+      heroPos: "BB",
+      heroCards: ["7c", "2d"],
+      board: [],
+      net: -2.5,
+      actionLog: [],
+      decisions: [],
+    }],
+    summary: {
+      handsTracked: 1,
+      vpip: 1,
+      pfr: 0,
+      threeBet: 0,
+      foldToCbet: null,
+      wtsd: 0,
+      netBb: -2.5,
+      leaks: [{
+        leakType: "defended too wide",
+        count: 1,
+        recommended: "fold",
+        examples: [{
+          id: "hand-1",
+          seed: "seed-1",
+          hand: "72o",
+          spot: "BB vs LJ open",
+          heroAction: "call",
+          recommended: "fold",
+          net: -2.5,
+        }],
+      }],
+    },
+    selectedLeakType: "",
+    status: "idle",
+    ...overrides,
+  };
 }
 
 function byId(root, id) {
