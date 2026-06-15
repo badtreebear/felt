@@ -564,6 +564,12 @@ const actions = {
       draft.ui.openPopover = null;
     });
   },
+  setSettingsOpen(settingsOpen) {
+    updateState((draft) => {
+      draft.ui.settingsOpen = settingsOpen;
+      draft.coach.settingsOpen = false;
+    });
+  },
   setCoachSettingsOpen(settingsOpen) {
     updateState((draft) => {
       draft.coach.settingsOpen = settingsOpen;

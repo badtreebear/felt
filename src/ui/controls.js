@@ -3,9 +3,12 @@ import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { baseProfilePercent } from "../roster/weights.js";
 import { STREET_ORDER } from "../state.js";
-import { createCoachSettingsControl } from "./coach-settings.js";
+import { createCoachSettingsPanel } from "./coach-settings.js";
+
+let removeSettingsDismissal = null;
 
 export function renderControls(container, state, actions) {
+  clearSettingsDismissal();
   container.replaceChildren();
   const nextScriptedLabel = scriptedContinuationLabel(state);
   const scriptedMode = Boolean(state.hand.preflop || state.hand.postflop);
@@ -16,34 +19,6 @@ export function renderControls(container, state, actions) {
   controls.setAttribute("aria-label", "Hand controls");
 
   controls.append(createHeroControl(state, actions));
-  controls.append(createModeControl(state, actions));
-
-  controls.append(
-    createSelectControl({
-      id: "players",
-      label: "Players",
-      value: String(state.config.players),
-      options: Array.from({ length: 8 }, (_, index) => {
-        const players = index + 2;
-        return { value: String(players), label: String(players) };
-      }),
-      onChange: (value) => actions.setPlayers(Number(value)),
-    }),
-  );
-
-  controls.append(
-    createSelectControl({
-      id: "street",
-      label: "Street",
-      value: state.hand.street,
-      options: STREET_ORDER.map((street) => ({
-        value: street,
-        label: STREET_LABELS[street],
-      })),
-      onChange: actions.setStreet,
-      disabled: scriptedMode,
-    }),
-  );
 
   const dealButton = createButton({
     label: "Deal new hand",
@@ -92,32 +67,13 @@ export function renderControls(container, state, actions) {
     title: "Open the active hero's hand tracker.",
   });
 
-  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton, trackerButton);
-  controls.append(createCoachSettingsControl(state, actions));
-  controls.append(createActionSpeedControl(state, actions));
+  const settings = createSettingsCogControl(state, actions, { scriptedMode });
 
-  const revealLabel = document.createElement("label");
-  revealLabel.className = "toggle";
-
-  const revealInput = document.createElement("input");
-  revealInput.type = "checkbox";
-  revealInput.checked = state.ui.revealVillains;
-  revealInput.addEventListener("change", (event) => {
-    actions.setRevealVillains(event.currentTarget.checked);
-  });
-
-  const revealText = document.createElement("span");
-  revealText.textContent = "Reveal villain cards";
-
-  revealLabel.append(revealInput, revealText);
-  controls.append(revealLabel);
-  controls.append(createPhaseFourSettings(state, actions));
-
-  if (state.ui.spotMode === "manual") {
-    controls.append(createManualSpotControls(state, actions));
-  }
+  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton, trackerButton, settings);
 
   container.append(controls);
+  bindSettingsDismissal(settings, state, actions);
+
   if (state.ui.trackerOpen) {
     container.append(createTrackerPanel(state, actions));
   }
@@ -201,6 +157,140 @@ function createHeroControl(state, actions) {
 
   wrapper.append(field, nameInput, addButton, renameButton, removeButton);
   return wrapper;
+}
+
+function createSettingsCogControl(state, actions, { scriptedMode }) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "settings-cog-wrap";
+
+  const button = createButton({
+    label: "Settings",
+    icon: "settings",
+    onClick: () => actions.setSettingsOpen(!state.ui.settingsOpen),
+    highlight: Boolean(state.ui.settingsOpen),
+    title: "Table settings",
+  });
+  button.classList.add("button--icon");
+  button.setAttribute("aria-label", "Table settings");
+  button.setAttribute("aria-expanded", String(Boolean(state.ui.settingsOpen)));
+  button.setAttribute("aria-haspopup", "dialog");
+  wrapper.append(button);
+
+  if (state.ui.settingsOpen) {
+    wrapper.append(createSettingsPanel(state, actions, { scriptedMode }));
+  }
+
+  return wrapper;
+}
+
+function createSettingsPanel(state, actions, { scriptedMode }) {
+  const panel = document.createElement("section");
+  panel.className = "app-settings";
+  panel.setAttribute("aria-label", "Table settings panel");
+
+  const gameplayControls = [
+    createModeControl(state, actions),
+    createSelectControl({
+      id: "players",
+      label: "Players",
+      value: String(state.config.players),
+      options: Array.from({ length: 8 }, (_, index) => {
+        const players = index + 2;
+        return { value: String(players), label: String(players) };
+      }),
+      onChange: (value) => actions.setPlayers(Number(value)),
+    }),
+    createSelectControl({
+      id: "street",
+      label: "Street",
+      value: state.hand.street,
+      options: STREET_ORDER.map((street) => ({
+        value: street,
+        label: STREET_LABELS[street],
+      })),
+      onChange: actions.setStreet,
+      disabled: scriptedMode,
+    }),
+    createActionSpeedControl(state, actions),
+    createRevealVillainsControl(state, actions),
+  ];
+
+  if (state.ui.spotMode === "manual") {
+    gameplayControls.push(createManualSpotControls(state, actions));
+  }
+
+  panel.append(
+    createSettingsSection("Gameplay", gameplayControls),
+    createSettingsSection("Display", [createPhaseFourSettings(state, actions)]),
+    createSettingsSection("Coach", [createCoachSettingsPanel(state, actions, { embedded: true })]),
+  );
+
+  return panel;
+}
+
+function createSettingsSection(title, controls) {
+  const section = document.createElement("div");
+  section.className = "app-settings__section";
+
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+
+  const body = document.createElement("div");
+  body.className = "app-settings__body";
+  body.append(...controls);
+
+  section.append(heading, body);
+  return section;
+}
+
+function createRevealVillainsControl(state, actions) {
+  const revealLabel = document.createElement("label");
+  revealLabel.className = "toggle toggle--inline";
+
+  const revealInput = document.createElement("input");
+  revealInput.type = "checkbox";
+  revealInput.checked = state.ui.revealVillains;
+  revealInput.addEventListener("change", (event) => {
+    actions.setRevealVillains(event.currentTarget.checked);
+  });
+
+  const revealText = document.createElement("span");
+  revealText.textContent = "Reveal villain cards";
+
+  revealLabel.append(revealInput, revealText);
+  return revealLabel;
+}
+
+function bindSettingsDismissal(wrapper, state, actions) {
+  if (!state.ui.settingsOpen) {
+    return;
+  }
+
+  const closeSettings = () => actions.setSettingsOpen(false);
+  const onPointerDown = (event) => {
+    if (!wrapper.contains(event.target)) {
+      closeSettings();
+    }
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      closeSettings();
+    }
+  };
+
+  document.addEventListener("pointerdown", onPointerDown);
+  document.addEventListener("keydown", onKeyDown);
+  removeSettingsDismissal = () => {
+    document.removeEventListener("pointerdown", onPointerDown);
+    document.removeEventListener("keydown", onKeyDown);
+    removeSettingsDismissal = null;
+  };
+}
+
+function clearSettingsDismissal() {
+  if (removeSettingsDismissal) {
+    removeSettingsDismissal();
+  }
 }
 
 function createTrackerPanel(state, actions) {

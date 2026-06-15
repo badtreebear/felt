@@ -259,8 +259,77 @@ input:focus-visible {
   opacity: 0.5;
 }
 
-.coach-settings-wrap {
+.coach-settings-wrap,
+.settings-cog-wrap {
   position: relative;
+}
+
+.app-settings {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 90;
+  display: grid;
+  gap: 14px;
+  width: min(680px, calc(100vw - 28px));
+  max-height: min(72vh, 720px);
+  overflow: auto;
+  border: 1px solid rgba(201, 162, 39, 0.46);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(7, 23, 20, 0.98);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.46);
+}
+
+.app-settings__section {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid rgba(247, 244, 237, 0.12);
+  padding-top: 12px;
+}
+
+.app-settings__section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.app-settings__section h3 {
+  margin: 0;
+  color: var(--brass);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.app-settings__body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.app-settings .toggle {
+  margin-left: 0;
+}
+
+.app-settings .manual-spot {
+  flex-basis: 100%;
+  margin-top: 2px;
+}
+
+.app-settings .phase-settings {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  align-items: start;
+  gap: 10px 12px;
+  width: 100%;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.app-settings .profile-grid {
+  grid-column: 1 / -1;
+  flex-basis: auto;
+  width: 100%;
 }
 
 .coach-settings {
@@ -276,6 +345,16 @@ input:focus-visible {
   padding: 12px;
   background: rgba(7, 23, 20, 0.98);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.46);
+}
+
+.coach-settings--embedded {
+  position: static;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .coach-settings__fields,
@@ -1851,6 +1930,16 @@ input:focus-visible {
   .phase-settings {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .app-settings {
+    left: 0;
+    right: auto;
+    width: min(calc(100vw - 20px), 420px);
+  }
+
+  .app-settings .phase-settings {
+    grid-template-columns: 1fr;
   }
 
   .profile-grid {

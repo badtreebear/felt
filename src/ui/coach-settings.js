@@ -13,15 +13,16 @@ export function createCoachSettingsControl(state, actions) {
   wrapper.append(button);
 
   if (state.coach.settingsOpen) {
-    wrapper.append(createSettingsPanel(state, actions));
+    wrapper.append(createCoachSettingsPanel(state, actions));
   }
 
   return wrapper;
 }
 
-function createSettingsPanel(state, actions) {
+export function createCoachSettingsPanel(state, actions, { embedded = false } = {}) {
   const panel = document.createElement("section");
   panel.className = "coach-settings";
+  panel.classList.toggle("coach-settings--embedded", embedded);
   panel.setAttribute("aria-label", "AI coach settings panel");
 
   const enabled = document.createElement("label");

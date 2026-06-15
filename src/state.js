@@ -55,6 +55,7 @@ export const state = {
     heroRaiseTo: 2.5,
     spotMode: "dealt",
     actionDelayMs: 1000,
+    settingsOpen: false,
     rosterOpen: false,
     rosterImportStatus: null,
     awaitingStart: false,
