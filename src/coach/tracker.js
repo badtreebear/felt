@@ -35,8 +35,9 @@ export function buildTrackerSummarySnapshot(state) {
 export function buildTrackerLeakSnapshot(state, { leakType, exampleId } = {}) {
   const leak = (state.tracker.summary?.leaks || []).find((candidate) => candidate.leakType === leakType) || null;
   const example = selectedExample(leak, exampleId);
-  const hand = example?.id
-    ? (state.tracker.hands || []).find((candidate) => candidate.id === example.id) || null
+  const handId = example?.handId || example?.id;
+  const hand = handId
+    ? (state.tracker.hands || []).find((candidate) => candidate.id === handId) || null
     : null;
   const decision = matchingDecision(hand, leakType, example);
 
@@ -108,6 +109,7 @@ function matchingDecision(hand, leakType, example) {
 function exampleSummary(example) {
   return {
     id: example.id || "",
+    handId: example.handId || example.id || "",
     seed: example.seed || "",
     hand: example.hand || "",
     spot: example.spot || "",

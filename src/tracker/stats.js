@@ -47,21 +47,25 @@ function rankedLeaks(hands) {
       const item = grouped.get(key) || {
         leakType: key,
         count: 0,
+        totalCostBb: 0,
         recommended: decision.recommended || "",
         examples: [],
       };
 
       item.count += 1;
+      item.totalCostBb += Number(decision.costBb) || 0;
       item.recommended = item.recommended || decision.recommended || "";
 
       if (item.examples.length < 8) {
         item.examples.push({
-          id: hand.id,
+          id: `${key}-${hand.id}-${item.examples.length + 1}`,
+          handId: hand.id,
           seed: hand.seed,
           hand: decision.hand,
           spot: decision.spot,
           heroAction: decision.heroAction,
           recommended: decision.recommended,
+          costBb: Number(decision.costBb) || 0,
           net: hand.net,
           ts: hand.ts,
         });
@@ -71,9 +75,13 @@ function rankedLeaks(hands) {
     });
   });
 
-  return [...grouped.values()].sort((first, second) => (
-    second.count - first.count || first.leakType.localeCompare(second.leakType)
-  ));
+  return [...grouped.values()]
+    .map((item) => ({ ...item, totalCostBb: round(item.totalCostBb) }))
+    .sort((first, second) => (
+      second.totalCostBb - first.totalCostBb
+      || second.count - first.count
+      || first.leakType.localeCompare(second.leakType)
+    ));
 }
 
 function ratio(count, total) {

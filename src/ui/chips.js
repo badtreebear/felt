@@ -72,7 +72,8 @@ function scheduleMathsPopoverClose(actions) {
 }
 
 export function shouldShowMathsPanel(state) {
-  return state?.ui?.spotMode === "manual" && Number(state?.hand?.toCall) > 0;
+  const enabled = state?.ui?.spotMode === "manual" || state?.ui?.showMaths;
+  return Boolean(enabled) && Number(state?.hand?.toCall) > 0;
 }
 
 function chipValue(id, state) {

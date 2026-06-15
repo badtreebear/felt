@@ -69,9 +69,17 @@ export function renderControls(container, state, actions) {
     title: "Open the active hero's hand tracker.",
   });
 
+  const mathsButton = createButton({
+    label: "Maths",
+    icon: "calculator",
+    onClick: () => actions.setShowMaths(!state.ui.showMaths),
+    highlight: Boolean(state.ui.showMaths) || state.ui.spotMode === "manual",
+    title: "Show EV, equity and pot odds for the current spot.",
+  });
+
   const settings = createSettingsCogControl(state, actions, { scriptedMode });
 
-  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton, trackerButton, settings);
+  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton, trackerButton, mathsButton, settings);
 
   container.append(controls);
   bindSettingsDismissal(settings, state, actions);

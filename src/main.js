@@ -774,6 +774,14 @@ const actions = {
       draft.ui.showProfiles = showProfiles;
     });
   },
+  setShowMaths(showMaths) {
+    updateState((draft) => {
+      draft.ui.showMaths = Boolean(showMaths);
+      if (!draft.ui.showMaths && draft.ui.spotMode !== "manual") {
+        draft.ui.openPopover = null;
+      }
+    });
+  },
   setDisplayUnit(displayUnit) {
     updateState((draft) => {
       draft.ui.displayUnit = displayUnit;
@@ -820,10 +828,23 @@ const actions = {
     const autoActionLimit = autoActionLimitForState(state);
 
     updateState((draft) => {
+      const evaluation = evaluatePostflopDecision({
+        hand: draft.hand,
+        config: draft.config,
+        postflop: draft.hand.postflop,
+      });
+      const decision = scorePostflopEvDecision({
+        postflop: draft.hand.postflop,
+        action,
+        evaluation,
+      });
       const postflop = applyHeroPostflopAction(draft.hand.postflop, {
         action,
         betAmount: cleanAmount(betAmount ?? draft.ui.heroRaiseTo),
       }, { autoActionLimit });
+      if (decision) {
+        draft.hand.trackerDecisions = [...(draft.hand.trackerDecisions || []), decision];
+      }
       applyPostflopToDraft(draft, postflop);
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
