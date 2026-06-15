@@ -21,14 +21,12 @@ export function evaluatePostflopDecision({
   }
 
   const potBeforeHeroCall = potBeforeCall(postflop, toCall);
-  const equityResult = runEquitySimulation({
-    heroCards,
-    board: postflop.board || [],
-    villains: villainRangesForPostflopDecision(postflop),
-    iterations,
-    progressEvery: iterations,
-    seed: seed || postflopDecisionKey({ hand, config, postflop }),
-  });
+  const equityResult = runHeroEquity({ hand, config, postflop, iterations, seed });
+
+  if (!equityResult) {
+    return null;
+  }
+
   const equity = equityResult.heroEquity;
   const needed = requiredEquity(potBeforeHeroCall, toCall);
   const callEv = evCall({ equity, pot: potBeforeHeroCall, toCall });
@@ -44,6 +42,72 @@ export function evaluatePostflopDecision({
     potBeforeHeroCall,
     toCall,
   };
+}
+
+// Evaluate a hero bet/raise that commits chips (used for all-in "got it in light"
+// detection). Assumes the bet is called: at an all-in there is no fold equity, so
+// the if-called EV is the honest read on whether the chips went in too light.
+export function evaluateHeroCommitment({
+  hand,
+  config,
+  postflop,
+  committed,
+  iterations = DEFAULT_POSTFLOP_EV_ITERATIONS,
+  seed,
+} = {}) {
+  const heroCards = hand?.holeCards?.[config?.heroSeat] || postflop?.holeCards?.[postflop?.heroSeat] || [];
+  const commit = Number(committed) || 0;
+
+  if (!postflop || heroCards.length !== 2 || commit <= 0) {
+    return null;
+  }
+
+  if (villainRangesForPostflopDecision(postflop).length === 0) {
+    return null;
+  }
+
+  const equityResult = runHeroEquity({
+    hand,
+    config,
+    postflop,
+    iterations,
+    seed: `${seed || postflopDecisionKey({ hand, config, postflop })}|commit`,
+  });
+
+  if (!equityResult) {
+    return null;
+  }
+
+  const equity = equityResult.heroEquity;
+  const pot = Math.max(0, Number(postflop.pot) || 0);
+
+  return {
+    equity,
+    requiredEquity: requiredEquity(pot, commit),
+    evCall: round(evCall({ equity, pot, toCall: commit })),
+    committed: commit,
+    pot,
+    iterations: equityResult.iterations,
+    exact: equityResult.exact,
+    opponentCount: equityResult.opponentCount,
+  };
+}
+
+function runHeroEquity({ hand, config, postflop, iterations = DEFAULT_POSTFLOP_EV_ITERATIONS, seed } = {}) {
+  const heroCards = hand?.holeCards?.[config?.heroSeat] || postflop?.holeCards?.[postflop?.heroSeat] || [];
+
+  if (!postflop || heroCards.length !== 2) {
+    return null;
+  }
+
+  return runEquitySimulation({
+    heroCards,
+    board: postflop.board || [],
+    villains: villainRangesForPostflopDecision(postflop),
+    iterations,
+    progressEvery: iterations,
+    seed: seed || postflopDecisionKey({ hand, config, postflop }),
+  });
 }
 
 export function postflopDecisionKey({ hand, config, postflop } = {}) {

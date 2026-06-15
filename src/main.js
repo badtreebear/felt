@@ -19,7 +19,7 @@ import {
 import { boardForStreet, dealHoldemHand, nextStreet, STREET_LABELS } from "./engine/deck.js";
 import { getOpeningRangeLoadError } from "./data/ranges/opening-ranges.js";
 import { callVerdict, evCall } from "./engine/ev.js";
-import { evaluatePostflopDecision, postflopDecisionKey } from "./engine/postflop-ev.js";
+import { evaluatePostflopDecision, evaluateHeroCommitment, postflopDecisionKey } from "./engine/postflop-ev.js";
 import {
   advancePreflopAction,
   applyHeroPreflopAction,
@@ -50,7 +50,7 @@ import { applySeatAssignment } from "./roster/seat-assignments.js";
 import { createPlayer, loadRoster, mergeImportedRoster, normalizePlayer, saveRoster } from "./roster/store.js";
 import { resolveSeatProfilesForHand } from "./roster/weights.js";
 import { scorePreflopDecision } from "./tracker/preflop-leaks.js";
-import { scorePostflopEvDecision } from "./tracker/postflop-leaks.js";
+import { scorePostflopEvDecision, scorePostflopSizing } from "./tracker/postflop-leaks.js";
 import { buildHandRecord, createHandRecordId } from "./tracker/recording.js";
 import { loadHandsForHero, saveHandRecord } from "./tracker/store.js";
 import { summarizeHands } from "./tracker/stats.js";
@@ -828,22 +828,38 @@ const actions = {
     const autoActionLimit = autoActionLimitForState(state);
 
     updateState((draft) => {
+      const pre = draft.hand.postflop;
+      const heroSeat = pre?.heroSeat;
+      const preStack = Number(pre?.stacks?.[heroSeat]) || 0;
+
+      // Call/fold vs EV (paid off / folded +EV).
       const evaluation = evaluatePostflopDecision({
         hand: draft.hand,
         config: draft.config,
-        postflop: draft.hand.postflop,
+        postflop: pre,
       });
-      const decision = scorePostflopEvDecision({
-        postflop: draft.hand.postflop,
-        action,
-        evaluation,
-      });
-      const postflop = applyHeroPostflopAction(draft.hand.postflop, {
+      const callFoldDecision = scorePostflopEvDecision({ postflop: pre, action, evaluation });
+
+      const postflop = applyHeroPostflopAction(pre, {
         action,
         betAmount: cleanAmount(betAmount ?? draft.ui.heroRaiseTo),
       }, { autoActionLimit });
-      if (decision) {
-        draft.hand.trackerDecisions = [...(draft.hand.trackerDecisions || []), decision];
+
+      // Bet/raise sizing + all-in commitment ("got it in light").
+      let sizingDecision = null;
+      if (action === "bet" || action === "raise") {
+        const postStack = Number(postflop?.stacks?.[heroSeat]) || 0;
+        const committed = Math.max(0, Math.round((preStack - postStack) * 100) / 100);
+        const allIn = postStack <= 0 && committed > 0;
+        const commitmentEval = allIn
+          ? evaluateHeroCommitment({ hand: draft.hand, config: draft.config, postflop: pre, committed })
+          : null;
+        sizingDecision = scorePostflopSizing({ postflop: pre, action, committed, allIn, commitmentEval });
+      }
+
+      const decisions = [callFoldDecision, sizingDecision].filter(Boolean);
+      if (decisions.length) {
+        draft.hand.trackerDecisions = [...(draft.hand.trackerDecisions || []), ...decisions];
       }
       applyPostflopToDraft(draft, postflop);
       draft.ui.openPopover = null;

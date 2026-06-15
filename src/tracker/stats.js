@@ -22,16 +22,30 @@ export function summarizeHands(hands = []) {
       summary.wtsd += 1;
     }
 
+    const flopLog = (hand.actionLog || []).filter((entry) => entry.street === "flop");
+    const heroFlopIdx = flopLog.findIndex((entry) => entry.seat === hand.heroSeat);
+    if (heroFlopIdx >= 0) {
+      const facedBet = flopLog.slice(0, heroFlopIdx).some((entry) => (
+        entry.seat !== hand.heroSeat && (entry.action === "bets" || entry.action === "raises to")
+      ));
+      if (facedBet) {
+        summary.cbetFaced += 1;
+        if (flopLog[heroFlopIdx].action === "folds") {
+          summary.cbetFolded += 1;
+        }
+      }
+    }
+
     summary.net += Number(hand.net) || 0;
     return summary;
-  }, { vpip: 0, pfr: 0, threeBet: 0, wtsd: 0, net: 0 });
+  }, { vpip: 0, pfr: 0, threeBet: 0, wtsd: 0, net: 0, cbetFaced: 0, cbetFolded: 0 });
 
   return {
     handsTracked: total,
     vpip: ratio(counts.vpip, total),
     pfr: ratio(counts.pfr, total),
     threeBet: ratio(counts.threeBet, total),
-    foldToCbet: null,
+    foldToCbet: ratio(counts.cbetFolded, counts.cbetFaced),
     wtsd: ratio(counts.wtsd, total),
     netBb: round(counts.net),
     leaks: rankedLeaks(tracked),
