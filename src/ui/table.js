@@ -13,6 +13,7 @@ import { createMathsChips, shouldShowMathsPanel } from "./chips.js";
 import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
 import { createRangeGrid, heroRangeVerdict } from "./range-grid.js";
+import { createSeatAssignmentGrid } from "./controls.js";
 import { rangePopoverPlacement } from "./range-popover-placement.js";
 
 const RANGE_CLOSE_DELAY_MS = 120;
@@ -509,12 +510,15 @@ function createHandPanel(state, showdown, actions) {
     setup.className = "setup-panel";
 
     const text = document.createElement("p");
-    text.textContent = "Assign players to the seats, then start the game.";
+    text.textContent = "Assign known players or types to the seats, then start the game.";
+
+    const seatGrid = createSeatAssignmentGrid(state, actions);
+    seatGrid.classList.add("setup-seats");
 
     const start = createHeroActionButton("Start game", () => actions.startGame());
     start.classList.add("setup-start");
 
-    setup.append(text, start);
+    setup.append(text, seatGrid, start);
     panel.append(heading, setup);
     return panel;
   }

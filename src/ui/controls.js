@@ -1029,6 +1029,13 @@ function createPhaseFourSettings(state, actions) {
   profileText.textContent = "Show villain profiles";
   profileVisibility.append(profileInput, profileText);
 
+  const profileGrid = createSeatAssignmentGrid(state, actions);
+
+  settings.append(displayToggle, profileVisibility, profileGrid);
+  return settings;
+}
+
+export function createSeatAssignmentGrid(state, actions) {
   const profileGrid = document.createElement("div");
   profileGrid.className = "profile-grid";
   const positions = state.hand.buttonSeat !== undefined
@@ -1050,8 +1057,7 @@ function createPhaseFourSettings(state, actions) {
     }));
   }
 
-  settings.append(displayToggle, profileVisibility, profileGrid);
-  return settings;
+  return profileGrid;
 }
 
 function seatAssignmentOptions(state) {
