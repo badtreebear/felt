@@ -7,8 +7,8 @@ import {
   validateVsThreeBetChart,
   validateVsRfiChart,
 } from "../src/engine/ranges.js";
-import pokerCoachingVsThreeBetChart from "../src/data/ranges/pokercoaching-vs3bet-9max.json";
-import pokerCoachingVsRfiChart from "../src/data/ranges/pokercoaching-vsrfi-9max.json";
+import pokerCoachingVsThreeBetChart from "../src/data/ranges/default-vs3bet-9max.json";
+import pokerCoachingVsRfiChart from "../src/data/ranges/default-vsrfi-9max.json";
 
 describe("getRangeForSpot", () => {
   it("keeps first-in spots on the existing RFI chart", () => {

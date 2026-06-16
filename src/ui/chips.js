@@ -1,5 +1,7 @@
 import { callVerdict } from "../engine/ev.js";
 import { finalPotAfterCall } from "../engine/potodds.js";
+import { legalPostflopActions } from "../engine/postflop-action.js";
+import { recommendHeroSize } from "../engine/bet-sizing.js";
 import { isCoachConfigured, isCoachReachable } from "../coach/config.js";
 import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
@@ -29,7 +31,12 @@ export function createMathsChips(state, actions, { renderPopover = true } = {}) 
     }
   });
 
-  CHIP_CONFIG.forEach((chip) => {
+  // Pot odds and EV only make sense when there is a bet to call; equity is
+  // always meaningful, so show it alone when the hero is not facing a bet.
+  const facingBet = Number(state?.hand?.toCall) > 0;
+  const chips = facingBet ? CHIP_CONFIG : CHIP_CONFIG.filter((chip) => chip.id === "equity");
+
+  chips.forEach((chip) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `maths-chip maths-chip--${chip.id}`;
@@ -40,6 +47,20 @@ export function createMathsChips(state, actions, { renderPopover = true } = {}) 
     button.addEventListener("click", () => actions.setOpenPopover(chip.id));
     tray.append(button);
   });
+
+  // Recommended size — one consistent button across bet/call/raise spots (bet when
+  // first in, raise when facing a bet). The face shows the size as a % of the pot;
+  // the bb/$ working and the advice are in the click popover.
+  const sizing = heroSizingRecommendation(state);
+  if (sizing && shouldShowSizeChip(sizing)) {
+    const sizeButton = document.createElement("button");
+    sizeButton.type = "button";
+    sizeButton.className = "maths-chip maths-chip--size";
+    sizeButton.setAttribute("aria-expanded", String(state.ui.openPopover === "size"));
+    sizeButton.textContent = `SIZE ${sizeChipValue(sizing)}`;
+    sizeButton.addEventListener("click", () => actions.setOpenPopover("size"));
+    tray.append(sizeButton);
+  }
 
   if (renderPopover && state.ui.openPopover) {
     tray.append(createPopover({
@@ -72,8 +93,13 @@ function scheduleMathsPopoverClose(actions) {
 }
 
 export function shouldShowMathsPanel(state) {
-  const enabled = state?.ui?.spotMode === "manual" || state?.ui?.showMaths;
-  return Boolean(enabled) && Number(state?.hand?.toCall) > 0;
+  // The explicit Maths toggle reveals the layer in any spot (equity is always
+  // meaningful). Manual spot mode keeps showing it whenever a bet is faced.
+  if (state?.ui?.showMaths) {
+    return true;
+  }
+
+  return state?.ui?.spotMode === "manual" && Number(state?.hand?.toCall) > 0;
 }
 
 function chipValue(id, state) {
@@ -105,10 +131,18 @@ function popoverTitle(id) {
     return "Pot odds";
   }
 
+  if (id === "size") {
+    return "Bet sizing";
+  }
+
   return "EV";
 }
 
 function popoverBody(id, state, actions) {
+  if (id === "size") {
+    return sizingBody(state);
+  }
+
   const body = deterministicBody(id, state);
   const coach = coachExplainBody(id, state, actions);
 
@@ -214,6 +248,63 @@ function paragraph(text) {
   const element = document.createElement("p");
   element.textContent = text;
   return element;
+}
+
+function heroSizingRecommendation(state) {
+  const postflop = state?.hand?.postflop;
+
+  if (!postflop || postflop.status !== "waitingHero") {
+    return null;
+  }
+
+  const legal = legalPostflopActions(postflop);
+
+  if (!legal.canAct || (!legal.canBet && !legal.canRaise)) {
+    return null;
+  }
+
+  const facingBet = Boolean(legal.facingBet && legal.canRaise);
+
+  return recommendHeroSize({
+    facingBet,
+    pot: Number(state.hand.pot) || 0,
+    stack: Number(legal.maxBet) || 0,
+    equity: state.maths.heroEquity,
+    toCall: Number(legal.callAmount) || 0,
+    board: state.hand.board || [],
+    minAmount: facingBet ? legal.minRaiseTo : Math.min(legal.minBet, legal.maxBet),
+    maxAmount: facingBet ? legal.maxRaiseTo : legal.maxBet,
+  });
+}
+
+function shouldShowSizeChip(rec) {
+  return rec.status === "pending" || rec.status === "ready";
+}
+
+function sizeChipValue(rec) {
+  if (rec.status === "pending") {
+    return "...";
+  }
+
+  return `${rec.fractionPct}%`;
+}
+
+function sizingBody(state) {
+  const body = document.createElement("div");
+  const rec = heroSizingRecommendation(state);
+
+  if (!rec || rec.status === "pending") {
+    body.append(paragraph("Working out a size - equity is still simulating."));
+    return body;
+  }
+
+  const label = rec.mode === "raise" ? "Raise to" : "Bet";
+  body.append(
+    paragraph(`${label} ${formatAmount(rec.amount, state)}${rec.shove ? " (all in)" : ""} - about ${rec.fractionPct}% of the pot.`),
+    paragraph(rec.rationale),
+    paragraph("Guideline from your equity and the board texture - a sensible standard size, not a solved/EV-optimal one."),
+  );
+  return body;
 }
 
 function formatPercent(value, { blank = "--" } = {}) {

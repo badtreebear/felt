@@ -538,7 +538,9 @@ function createHandPanel(state, showdown, actions) {
   }
 
   if (shouldShowMathsPanel(state)) {
-    meta.append(createMeta("To call", formatAmount(state.hand.toCall, state)));
+    if (Number(state.hand.toCall) > 0) {
+      meta.append(createMeta("To call", formatAmount(state.hand.toCall, state)));
+    }
     // Clickable Equity / Pot odds / EV chips (with explain + coach popover),
     // mirroring the hero-seat chips. Popover renders here in the hand panel.
     const handChips = createMathsChips(state, actions, { renderPopover: true });
@@ -650,10 +652,10 @@ function createPreflopHeroActionControls(state, actions) {
   raiseRow.className = "hero-actions__raise";
 
   const input = document.createElement("input");
-  input.type = "number";
+  input.type = "text";
+  input.inputMode = "decimal";
   input.min = String(legal.minRaiseTo);
   input.max = String(legal.maxRaiseTo);
-  input.step = "0.5";
   input.value = String(raiseTo);
   input.setAttribute("aria-label", "Raise amount");
   input.addEventListener("change", (event) => {
@@ -735,13 +737,13 @@ function createPostflopHeroActionControls(state, actions) {
       raiseRow.className = "hero-actions__raise";
 
       const input = document.createElement("input");
-      input.type = "number";
+      input.type = "text";
+      input.inputMode = "decimal";
       input.min = String(legal.minRaiseTo);
       input.max = String(legal.maxRaiseTo);
-      input.step = "0.5";
       input.value = String(raiseTo);
       input.setAttribute("aria-label", "Raise to amount");
-      input.addEventListener("input", (event) => {
+      input.addEventListener("change", (event) => {
         actions.setHeroRaiseTo(Number(event.currentTarget.value));
       });
 
@@ -775,10 +777,10 @@ function createPostflopHeroActionControls(state, actions) {
   betRow.className = "hero-actions__raise";
 
   const input = document.createElement("input");
-  input.type = "number";
+  input.type = "text";
+  input.inputMode = "decimal";
   input.min = String(effectiveMinBet);
   input.max = String(legal.maxBet);
-  input.step = "0.5";
   input.value = String(betAmount);
   input.setAttribute("aria-label", "Bet amount");
   input.addEventListener("change", (event) => {
@@ -973,6 +975,12 @@ function heroRfiText(state) {
     buttonSeat: state.hand.buttonSeat,
   });
   const heroPosition = positions[state.config.heroSeat];
+
+  // A1: the BB is never an RFI/open spot — show no RFI hint rather than "no chart for BB".
+  if (heroPosition === "BB") {
+    return null;
+  }
+
   const range = getOpeningRange({ players: state.config.players, position: heroPosition });
 
   if (!range.chartAvailable) {

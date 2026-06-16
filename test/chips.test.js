@@ -18,4 +18,16 @@ describe("maths chips visibility", () => {
       hand: { toCall: 8 },
     })).toBe(true);
   });
+
+  it("reveals the maths layer whenever the Maths toggle is on, even with no bet faced", () => {
+    expect(shouldShowMathsPanel({
+      ui: { spotMode: "dealt", showMaths: true },
+      hand: { toCall: 0 },
+    })).toBe(true);
+
+    expect(shouldShowMathsPanel({
+      ui: { spotMode: "dealt", showMaths: false },
+      hand: { toCall: 0 },
+    })).toBe(false);
+  });
 });

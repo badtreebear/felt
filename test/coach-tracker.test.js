@@ -27,6 +27,7 @@ describe("tracker coach snapshots", () => {
         totalCostBb: null,
         examples: [{
           id: "hand-1",
+          handId: "hand-1",
           seed: "seed-1",
           hand: "72o",
           spot: "BB vs LJ open",

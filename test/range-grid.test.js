@@ -12,7 +12,7 @@ describe("range grid", () => {
   it("marks a premium hero hand in range for UTG", () => {
     const range = getOpeningRange({ players: 9, position: "UTG" });
 
-    expect(range.source).toContain("PokerCoaching.com");
+    expect(range.source).toContain("Standard 100bb preflop ranges");
     expect(range.isPlaceholder).toBe(false);
     expect(heroRangeVerdict(["Ah", "Ad"], range.grid).status).toBe("in range");
     expect(heroRangeVerdict(["7c", "2d"], range.grid).status).toBe("not in range");
@@ -51,13 +51,16 @@ describe("range grid", () => {
     expect(heroRangeVerdict(["Ah", "Ad"], grid).status).toBe("4-bet for value");
   });
 
-  it("returns a neutral no-chart range for blinds", () => {
+  it("resolves SB at a full ring and leaves BB as the only no-RFI blind", () => {
     const smallBlind = getOpeningRange({ players: 9, position: "SB" });
     const bigBlind = getOpeningRange({ players: 9, position: "BB" });
 
-    expect(smallBlind.chartAvailable).toBe(false);
-    expect(smallBlind.grid).toBeNull();
-    expect(smallBlind.message).toContain("No RFI chart");
+    // SB now has a dedicated opening chart at every table size (was a gap before).
+    expect(smallBlind.chartAvailable).toBe(true);
+    expect(smallBlind.position).toBe("SB");
+    expect(smallBlind.grid).not.toBeNull();
+
+    // BB is never an RFI spot; the contextual layer handles its walk/defense.
     expect(bigBlind.chartAvailable).toBe(false);
     expect(bigBlind.message).toContain("No RFI chart");
   });

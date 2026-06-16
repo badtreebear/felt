@@ -17,6 +17,12 @@ export function getRangeForSpot({ players, seat, position, hand }) {
   const preflop = hand?.preflop;
 
   if (!preflop || preflop.voluntaryRaiserSeat === null || preflop.voluntaryRaiserSeat === undefined) {
+    // A1: the BB is never an RFI/open spot. Folded around to the BB is a check/walk,
+    // not an opening decision, so show a friendly option note instead of "no chart".
+    if (position === "BB") {
+      return bbOptionRange({ players, position });
+    }
+
     return titledOpeningRange(openingRange, `${position} - open (RFI)`, "rfi");
   }
 
@@ -156,6 +162,30 @@ function findVsThreeBetSpot({ openerPosition, threeBettorPosition }) {
     spot.openerPosition === openerPosition
     && spot.threeBettorPositions.includes(threeBettorPosition)
   ));
+}
+
+function bbOptionRange({ players, position }) {
+  // Folded to the BB with no raise: a check/walk, not a charted decision.
+  // chartAvailable stays false (the grid renderer needs a grid), but the message
+  // is a friendly option note, never the "no chart for {pos}" fallback string.
+  return {
+    bucket: rangeBucketForPlayers(players),
+    source: "",
+    url: "",
+    meta: {},
+    tableSize: players,
+    position,
+    displayPosition: position,
+    chartAvailable: false,
+    chartLoaded: true,
+    isPlaceholder: false,
+    kind: "walk",
+    title: "BB - checks option",
+    message: "Folded to the big blind: check your option. No preflop decision to train here.",
+    error: null,
+    grid: null,
+    combos: [],
+  };
 }
 
 function titledOpeningRange(openingRange, title, kind) {

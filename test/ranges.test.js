@@ -10,7 +10,7 @@ import {
   validateRfiChart,
 } from "../src/engine/ranges.js";
 import placeholderChart from "../src/data/ranges/placeholder-9max.json";
-import pokerCoachingRfiChart from "../src/data/ranges/pokercoaching-rfi-9max.json";
+import pokerCoachingRfiChart from "../src/data/ranges/default-rfi-9max.json";
 
 describe("range loader", () => {
   it("validates the placeholder chart schema", () => {

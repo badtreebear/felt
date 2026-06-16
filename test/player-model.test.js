@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import pokerCoachingRfiChart from "../src/data/ranges/pokercoaching-rfi-9max.json";
+import pokerCoachingRfiChart from "../src/data/ranges/default-rfi-9max.json";
 import {
   PLAYER_MODEL_CONSTANTS,
   adjustedOpeningRange,
