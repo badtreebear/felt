@@ -221,7 +221,7 @@ function createSeats(state, actions) {
 }
 
 function createProfileBadge({ seat, isHero, state, seatPlayer }) {
-  const showProfile = !isHero && (state.ui.showProfiles || isTerminalHand(state));
+  const showProfile = !isHero && state.ui.showProfiles;
 
   if (!showProfile) {
     return null;

@@ -57,7 +57,8 @@ export function createMathsChips(state, actions, { renderPopover = true } = {}) 
     sizeButton.type = "button";
     sizeButton.className = "maths-chip maths-chip--size";
     sizeButton.setAttribute("aria-expanded", String(state.ui.openPopover === "size"));
-    sizeButton.textContent = `SIZE ${sizeChipValue(sizing)}`;
+    sizeButton.textContent = sizeChipLabel(sizing);
+    sizeButton.classList.toggle("maths-chip--passive", isPassiveAdvice(sizing));
     sizeButton.addEventListener("click", () => actions.setOpenPopover("size"));
     tray.append(sizeButton);
   }
@@ -281,12 +282,29 @@ function shouldShowSizeChip(rec) {
   return rec.status === "pending" || rec.status === "ready";
 }
 
-function sizeChipValue(rec) {
+// The chip face names the recommended line so it never silently implies "raise".
+// When raising/betting is the play it shows the verb + size (e.g. "RAISE 70%");
+// when the equity says to just call or check it shows that instead, and the
+// would-be size still lives in the click popover.
+function sizeChipLabel(rec) {
   if (rec.status === "pending") {
-    return "...";
+    return "SIZE ...";
   }
 
-  return `${rec.fractionPct}%`;
+  if (rec.advice === "callFold") {
+    return "CALL";
+  }
+
+  if (rec.advice === "check") {
+    return "CHECK";
+  }
+
+  const verb = rec.mode === "raise" ? "RAISE" : "BET";
+  return `${verb} ${rec.fractionPct}%`;
+}
+
+function isPassiveAdvice(rec) {
+  return rec.status === "ready" && (rec.advice === "callFold" || rec.advice === "check");
 }
 
 function sizingBody(state) {

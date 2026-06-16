@@ -5,6 +5,12 @@ import { runEquitySimulation } from "./equity.js";
 import { expandPositionRange } from "./ranges.js";
 
 const DEFAULT_POSTFLOP_EV_ITERATIONS = 6000;
+// This equity sim runs synchronously on the main thread inside the hero-action
+// click handler (for tracker leak scoring). Range-vs-range sampling on crowded
+// boards can take many seconds, freezing the UI. Cap the wall-clock budget so a
+// click can never stall: a few hundred iterations in this window is plenty
+// accurate for classifying a call/fold/sizing decision.
+const POSTFLOP_EV_TIME_LIMIT_MS = 200;
 
 export function evaluatePostflopDecision({
   hand,
@@ -106,6 +112,7 @@ function runHeroEquity({ hand, config, postflop, iterations = DEFAULT_POSTFLOP_E
     villains: villainRangesForPostflopDecision(postflop),
     iterations,
     progressEvery: iterations,
+    timeLimitMs: POSTFLOP_EV_TIME_LIMIT_MS,
     seed: seed || postflopDecisionKey({ hand, config, postflop }),
   });
 }

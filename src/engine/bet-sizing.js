@@ -75,12 +75,22 @@ export function recommendHeroSize({
   const texture = boardTextureScore(board);
   const mode = facingBet ? "raise" : "bet";
 
-  // Whether aggression is actually the recommended line.
-  const advice = eq >= 0.6
-    ? "value"
-    : eq >= 0.45
-      ? "thin"
-      : (facingBet ? "callFold" : "check");
+  // Whether aggression is actually the recommended line. Raising into a bet has
+  // to beat just calling, so the bar to raise is higher than the bar to bet when
+  // checked to: a middling hand that would happily bet for thin value first-in
+  // should usually just call a bet rather than raise it. Keep the first-in
+  // (bet) thresholds permissive and the facing-a-bet (raise) thresholds strict.
+  const advice = facingBet
+    ? (eq >= 0.7
+      ? "value"
+      : eq >= 0.6
+        ? "thin"
+        : "callFold")
+    : (eq >= 0.6
+      ? "value"
+      : eq >= 0.45
+        ? "thin"
+        : "check");
 
   // Pot fraction for the standard size in this spot, widened on wetter boards.
   let fraction;
