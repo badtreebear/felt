@@ -2,8 +2,11 @@ import { callVerdict } from "../engine/ev.js";
 import { finalPotAfterCall } from "../engine/potodds.js";
 import { legalPostflopActions } from "../engine/postflop-action.js";
 import { recommendHeroSize } from "../engine/bet-sizing.js";
+import { getSeatPositions } from "../engine/positions.js";
+import { getOpeningRange } from "../data/ranges/opening-ranges.js";
 import { isCoachConfigured, isCoachReachable } from "../coach/config.js";
 import { formatAmount } from "./formatting.js";
+import { heroRangeVerdict } from "./range-grid.js";
 import { createPopover } from "./popover.js";
 
 const CHIP_CONFIG = [
@@ -15,7 +18,9 @@ const MATHS_POPOVER_CLOSE_DELAY_MS = 120;
 let mathsPopoverCloseTimer = null;
 
 export function createMathsChips(state, actions, { renderPopover = true } = {}) {
-  if (!shouldShowMathsPanel(state)) {
+  // Render when the Maths layer is on (deterministic chips) OR whenever the hero
+  // is to act (so the constant Bet tip button is always available).
+  if (!shouldShowMathsPanel(state) && !heroIsToAct(state)) {
     return null;
   }
 
@@ -32,35 +37,36 @@ export function createMathsChips(state, actions, { renderPopover = true } = {}) 
   });
 
   // Pot odds and EV only make sense when there is a bet to call; equity is
-  // always meaningful, so show it alone when the hero is not facing a bet.
-  const facingBet = Number(state?.hand?.toCall) > 0;
-  const chips = facingBet ? CHIP_CONFIG : CHIP_CONFIG.filter((chip) => chip.id === "equity");
+  // always meaningful, so show it alone when the hero is not facing a bet. The
+  // deterministic chips only render when the Maths layer is on.
+  if (shouldShowMathsPanel(state)) {
+    const facingBet = Number(state?.hand?.toCall) > 0;
+    const chips = facingBet ? CHIP_CONFIG : CHIP_CONFIG.filter((chip) => chip.id === "equity");
 
-  chips.forEach((chip) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `maths-chip maths-chip--${chip.id}`;
-    button.classList.toggle("maths-chip--negative", chip.id === "ev" && Number(state.maths.evCall) < 0);
-    button.classList.toggle("maths-chip--positive", chip.id === "ev" && Number(state.maths.evCall) >= 0);
-    button.setAttribute("aria-expanded", String(state.ui.openPopover === chip.id));
-    button.textContent = `${chip.label.toUpperCase()} ${chipValue(chip.id, state)}`;
-    button.addEventListener("click", () => actions.setOpenPopover(chip.id));
-    tray.append(button);
-  });
+    chips.forEach((chip) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `maths-chip maths-chip--${chip.id}`;
+      button.classList.toggle("maths-chip--negative", chip.id === "ev" && Number(state.maths.evCall) < 0);
+      button.classList.toggle("maths-chip--positive", chip.id === "ev" && Number(state.maths.evCall) >= 0);
+      button.setAttribute("aria-expanded", String(state.ui.openPopover === chip.id));
+      button.textContent = `${chip.label.toUpperCase()} ${chipValue(chip.id, state)}`;
+      button.addEventListener("click", () => actions.setOpenPopover(chip.id));
+      tray.append(button);
+    });
+  }
 
-  // Recommended size — one consistent button across bet/call/raise spots (bet when
-  // first in, raise when facing a bet). The face shows the size as a % of the pot;
-  // the bb/$ working and the advice are in the click popover.
-  const sizing = heroSizingRecommendation(state);
-  if (sizing && shouldShowSizeChip(sizing)) {
-    const sizeButton = document.createElement("button");
-    sizeButton.type = "button";
-    sizeButton.className = "maths-chip maths-chip--size";
-    sizeButton.setAttribute("aria-expanded", String(state.ui.openPopover === "size"));
-    sizeButton.textContent = sizeChipLabel(sizing);
-    sizeButton.classList.toggle("maths-chip--passive", isPassiveAdvice(sizing));
-    sizeButton.addEventListener("click", () => actions.setOpenPopover("size"));
-    tray.append(sizeButton);
+  // Bet tip — a constant button present in every hero-to-act spot (preflop and
+  // postflop, regardless of the Maths toggle). Clicking it shows the engine's
+  // recommendation and fires a coach AI overview for the spot.
+  if (heroIsToAct(state)) {
+    const tipButton = document.createElement("button");
+    tipButton.type = "button";
+    tipButton.className = "maths-chip maths-chip--tip";
+    tipButton.setAttribute("aria-expanded", String(state.ui.openPopover === "betTip"));
+    tipButton.textContent = "BET TIP";
+    tipButton.addEventListener("click", () => actions.setOpenPopover("betTip"));
+    tray.append(tipButton);
   }
 
   if (renderPopover && state.ui.openPopover) {
@@ -132,16 +138,16 @@ function popoverTitle(id) {
     return "Pot odds";
   }
 
-  if (id === "size") {
-    return "Bet sizing";
+  if (id === "betTip") {
+    return "Bet tip";
   }
 
   return "EV";
 }
 
 function popoverBody(id, state, actions) {
-  if (id === "size") {
-    return sizingBody(state);
+  if (id === "betTip") {
+    return betTipBody(state, actions);
   }
 
   const body = deterministicBody(id, state);
@@ -278,51 +284,186 @@ function heroSizingRecommendation(state) {
   });
 }
 
-function shouldShowSizeChip(rec) {
-  return rec.status === "pending" || rec.status === "ready";
+// The hero is on the clock whenever a preflop or postflop phase is waiting on a
+// hero decision. The Bet tip button shows in exactly these spots.
+export function heroIsToAct(state) {
+  return state?.hand?.postflop?.status === "waitingHero"
+    || state?.hand?.preflop?.status === "waitingHero";
 }
 
-// The chip face names the recommended line so it never silently implies "raise".
-// When raising/betting is the play it shows the verb + size (e.g. "RAISE 70%");
-// when the equity says to just call or check it shows that instead, and the
-// would-be size still lives in the click popover.
-function sizeChipLabel(rec) {
-  if (rec.status === "pending") {
-    return "SIZE ...";
-  }
-
-  if (rec.advice === "callFold") {
-    return "CALL";
-  }
-
-  if (rec.advice === "check") {
-    return "CHECK";
-  }
-
-  const verb = rec.mode === "raise" ? "RAISE" : "BET";
-  return `${verb} ${rec.fractionPct}%`;
+// Stable per-spot key so the auto coach overview is cached within a spot but
+// refreshes as the action advances (same shape used for other coach topics).
+export function betTipTopic(state) {
+  const hand = state?.hand || {};
+  const board = (hand.board || []).join("");
+  const acted = (hand.actionLog || []).length;
+  return `betTip:${hand.seed || "x"}:${hand.street || ""}:${board}:${hand.pot || 0}:${hand.toCall || 0}:${acted}`;
 }
 
-function isPassiveAdvice(rec) {
-  return rec.status === "ready" && (rec.advice === "callFold" || rec.advice === "check");
+// The engine's recommendation for the current spot: postflop sizing/advice when
+// available, otherwise the preflop opening verdict, plus the deterministic
+// equity / pot-odds / EV / verdict numbers when they exist.
+function heroEngineTip(state) {
+  const maths = state?.maths || {};
+  const facingBet = Number(state?.hand?.toCall) > 0;
+  const numbers = [];
+
+  if (Number.isFinite(Number(maths.heroEquity))) {
+    numbers.push(`equity ${formatPercent(maths.heroEquity)}`);
+  }
+  if (facingBet && Number.isFinite(Number(maths.requiredEquity))) {
+    numbers.push(`pot odds ${formatPercent(maths.requiredEquity)}`);
+  }
+  if (maths.evCall !== null && maths.evCall !== undefined) {
+    numbers.push(`EV(call) ${formatAmount(maths.evCall, state, { signed: true })}`);
+  }
+
+  let action = null;
+  let detail = null;
+
+  if (state?.hand?.postflop?.status === "waitingHero") {
+    const rec = heroSizingRecommendation(state);
+
+    if (rec?.status === "ready") {
+      if (rec.advice === "value" || rec.advice === "thin") {
+        const verb = rec.mode === "raise" ? "Raise" : "Bet";
+        action = `${verb} ~${rec.fractionPct}% of the pot (${formatAmount(rec.amount, state)}${rec.shove ? ", all in" : ""}).`;
+      } else if (rec.advice === "callFold") {
+        action = "Call or fold — this is not a raising spot.";
+      } else if (rec.advice === "check") {
+        action = "Check — too thin to bet for value.";
+      }
+      detail = rec.rationale;
+    } else if (rec?.status === "pending") {
+      action = "Working out a size — equity is still simulating.";
+    }
+  } else if (state?.hand?.preflop?.status === "waitingHero" && state?.hand?.street === "preflop") {
+    const verdict = preflopOpenVerdict(state);
+
+    if (verdict === "raise") {
+      action = "Raise (open) — this hand is in your RFI range.";
+    } else if (verdict === "fold") {
+      action = "Fold — this hand is outside your RFI range.";
+    } else if (verdict === "mixed") {
+      action = "Borderline — a mixed open/fold hand.";
+    }
+
+    if (facingBet && maths.verdict) {
+      detail = `By the engine numbers, calling is ${maths.verdict}.`;
+    }
+  }
+
+  if (!action && maths.verdict) {
+    action = `Engine verdict: calling is ${maths.verdict}.`;
+  }
+
+  return { action, detail, numbers };
 }
 
-function sizingBody(state) {
+// Plain-text form of the engine tip, fed to the coach so its overview agrees
+// with the engine instead of recomputing.
+export function engineTipText(state) {
+  const tip = heroEngineTip(state);
+  const parts = [];
+
+  if (tip.action) {
+    parts.push(tip.action);
+  }
+  if (tip.detail) {
+    parts.push(tip.detail);
+  }
+  if (tip.numbers.length) {
+    parts.push(tip.numbers.join(", "));
+  }
+
+  return parts.join(" ") || "No engine recommendation is available for this spot yet.";
+}
+
+function preflopOpenVerdict(state) {
+  const positions = getSeatPositions({
+    players: state.config.players,
+    buttonSeat: state.hand.buttonSeat,
+  });
+  const heroPosition = positions[state.config.heroSeat];
+
+  if (heroPosition === "BB") {
+    return null; // the BB never opens
+  }
+
+  const range = getOpeningRange({ players: state.config.players, position: heroPosition });
+
+  if (!range.chartAvailable || range.isPlaceholder) {
+    return null;
+  }
+
+  const heroCards = state.hand.holeCards[state.config.heroSeat] || [];
+  const verdict = heroRangeVerdict(heroCards, range.grid);
+
+  if (verdict.status === "not in range") {
+    return "fold";
+  }
+  if (verdict.status === "mixed") {
+    return "mixed";
+  }
+  return "raise";
+}
+
+function betTipBody(state, actions) {
   const body = document.createElement("div");
-  const rec = heroSizingRecommendation(state);
+  body.className = "bet-tip";
 
-  if (!rec || rec.status === "pending") {
-    body.append(paragraph("Working out a size - equity is still simulating."));
-    return body;
+  const tip = heroEngineTip(state);
+
+  const engineWrap = document.createElement("div");
+  engineWrap.className = "bet-tip__section";
+  engineWrap.append(sectionLabel("What the engine thinks"));
+  engineWrap.append(paragraph(tip.action || "No engine recommendation for this spot yet."));
+  if (tip.detail) {
+    engineWrap.append(paragraph(tip.detail));
+  }
+  if (tip.numbers.length) {
+    const nums = paragraph(tip.numbers.join("   ·   "));
+    nums.className = "bet-tip__numbers";
+    engineWrap.append(nums);
+  }
+  body.append(engineWrap);
+
+  // Coach overview is a button (like the equity / pot-odds / EV popovers) rather
+  // than auto-firing, so the player chooses when to spend a coach call.
+  if (isCoachConfigured(state.coach.config)) {
+    const coachWrap = document.createElement("div");
+    coachWrap.className = "coach-explain";
+
+    if (!isCoachReachable(state.coach)) {
+      coachWrap.append(paragraph("Coach offline — the engine tip above still applies."));
+    } else {
+      const explain = state.coach.explain?.[betTipTopic(state)] || { status: "idle", content: "" };
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "coach-explain__button";
+      button.disabled = explain.status === "loading";
+      button.textContent = explain.status === "loading" ? "Coach thinking..." : "Ask coach";
+      button.addEventListener("click", () => actions.requestBetTipCoach());
+      coachWrap.append(button);
+
+      if (explain.content) {
+        const response = paragraph(explain.content);
+        response.className = "coach-response";
+        coachWrap.append(response);
+      }
+    }
+
+    body.append(coachWrap);
   }
 
-  const label = rec.mode === "raise" ? "Raise to" : "Bet";
-  body.append(
-    paragraph(`${label} ${formatAmount(rec.amount, state)}${rec.shove ? " (all in)" : ""} - about ${rec.fractionPct}% of the pot.`),
-    paragraph(rec.rationale),
-    paragraph("Guideline from your equity and the board texture - a sensible standard size, not a solved/EV-optimal one."),
-  );
   return body;
+}
+
+function sectionLabel(text) {
+  const label = document.createElement("p");
+  label.className = "bet-tip__label";
+  label.textContent = text;
+  return label;
 }
 
 function formatPercent(value, { blank = "--" } = {}) {

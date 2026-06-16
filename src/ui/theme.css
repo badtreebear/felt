@@ -1467,6 +1467,36 @@ input:focus-visible {
   color: #ffd1cc;
 }
 
+.maths-chip--tip {
+  border-color: rgba(201, 162, 39, 0.9);
+  background: rgba(201, 162, 39, 0.22);
+  color: #fff4d6;
+}
+
+.bet-tip {
+  display: grid;
+  gap: 12px;
+}
+
+.bet-tip__section {
+  display: grid;
+  gap: 6px;
+}
+
+.bet-tip__label {
+  margin: 0;
+  color: var(--brass);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bet-tip__numbers {
+  color: #d9d2c2;
+  font-variant-numeric: tabular-nums;
+}
+
 .coach-explain {
   display: grid;
   gap: 8px;
@@ -1498,7 +1528,7 @@ input:focus-visible {
   position: absolute;
   left: 0;
   bottom: calc(100% + 8px);
-  z-index: 20;
+  z-index: 200;
   width: min(320px, 80vw);
   border: 1px solid rgba(201, 162, 39, 0.72);
   border-radius: 8px;
@@ -1658,7 +1688,9 @@ input:focus-visible {
   padding: 18px;
   background: rgba(7, 23, 20, 0.78);
   box-shadow: var(--shadow);
-  overflow: auto;
+  /* overflow:visible so an open Bet tip / maths popover can paint outside the
+     panel instead of being clipped. The page itself scrolls if content grows. */
+  overflow: visible;
 }
 
 .hand-panel h2 {

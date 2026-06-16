@@ -537,16 +537,16 @@ function createHandPanel(state, showdown, actions) {
     meta.append(createMeta("RFI", heroRfi));
   }
 
-  if (shouldShowMathsPanel(state)) {
-    if (Number(state.hand.toCall) > 0) {
-      meta.append(createMeta("To call", formatAmount(state.hand.toCall, state)));
-    }
-    // Clickable Equity / Pot odds / EV chips (with explain + coach popover),
-    // mirroring the hero-seat chips. Popover renders here in the hand panel.
-    const handChips = createMathsChips(state, actions, { renderPopover: true });
-    if (handChips) {
-      meta.append(handChips);
-    }
+  if (shouldShowMathsPanel(state) && Number(state.hand.toCall) > 0) {
+    meta.append(createMeta("To call", formatAmount(state.hand.toCall, state)));
+  }
+
+  // Clickable Equity / Pot odds / EV chips when the Maths layer is on, plus the
+  // constant Bet tip button whenever the hero is to act. Popover renders here in
+  // the hand panel.
+  const handChips = createMathsChips(state, actions, { renderPopover: true });
+  if (handChips) {
+    meta.append(handChips);
   }
 
   if (showdown) {

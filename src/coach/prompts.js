@@ -30,6 +30,21 @@ export function buildExplainMessages({ snapshot, topic }) {
   ];
 }
 
+export function buildBetTipMessages({ snapshot }) {
+  return [
+    systemMessage(snapshot),
+    {
+      role: "user",
+      content: [
+        "Give a short bet tip for the spot in this snapshot.",
+        "State the recommended action (fold, check, call, bet, or raise) and a size if betting or raising.",
+        "The engine recommendation and numbers in the snapshot are authoritative — agree with them and explain why in plain language.",
+        "Keep it under about 80 words.",
+      ].join(" "),
+    },
+  ];
+}
+
 export function buildChatMessages({ snapshot, history = [], input }) {
   return [
     systemMessage(snapshot),

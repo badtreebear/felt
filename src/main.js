@@ -2,6 +2,7 @@ import { BarChart3, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuf
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
 import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig } from "./coach/config.js";
 import {
+  buildBetTipMessages,
   buildChatMessages,
   buildExplainMessages,
   buildHandReviewMessages,
@@ -56,6 +57,7 @@ import { loadHandsForHero, saveHandRecord } from "./tracker/store.js";
 import { summarizeHands } from "./tracker/stats.js";
 import { renderControls } from "./ui/controls.js";
 import { renderTable } from "./ui/table.js";
+import { betTipTopic, engineTipText } from "./ui/chips.js";
 import "./ui/theme.css";
 
 const app = document.querySelector("#app");
@@ -572,6 +574,23 @@ const actions = {
     updateState((draft) => {
       draft.ui.openPopover = draft.ui.openPopover === openPopover ? null : openPopover;
     });
+  },
+  async requestBetTipCoach() {
+    if (!isCoachReachable(state.coach)) {
+      return; // the popover shows an offline / not-configured note instead
+    }
+
+    const topic = betTipTopic(state);
+    const existing = state.coach.explain?.[topic];
+
+    if (existing && existing.status === "loading") {
+      return; // a request for this exact spot is already in flight
+    }
+
+    const snapshot = { ...buildCoachSnapshot(state), recommendation: engineTipText(state) };
+    const messages = buildBetTipMessages({ snapshot });
+
+    await requestCoachMessages({ topic, messages, maxTokens: 180 });
   },
   setOpenRangeSeat(openRangeSeat) {
     updateState((draft) => {
