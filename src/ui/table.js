@@ -579,6 +579,11 @@ function createHandPanel(state, showdown, actions) {
     panel.append(heroControls);
   }
 
+  const liveGradingPanel = createLiveGradingPanel(state);
+  if (liveGradingPanel) {
+    panel.append(liveGradingPanel);
+  }
+
   if (completionCue) {
     panel.append(completionCue);
   }
@@ -1153,4 +1158,113 @@ function clampAmount(value, min, max) {
   }
 
   return Math.min(Math.max(number, min), max);
+}
+
+// Live-grading panel: shows the most recent hero decision's matched/missed
+// state and a one-line reason. Gated on `state.session.enabled` so it's quiet
+// by default. Returns null when there's nothing to show (no decision yet, or
+// session disabled).
+export function createLiveGradingPanel(state) {
+  if (!state?.session?.enabled) {
+    return null;
+  }
+
+  const wrapper = document.createElement("section");
+  wrapper.className = "live-grading-panel";
+  wrapper.setAttribute("aria-label", "Live grading");
+
+  wrapper.append(createSessionScoreboard(state.session));
+
+  const feedback = state.hand.lastFeedback;
+
+  if (feedback) {
+    const line = document.createElement("p");
+    line.className = "live-grading-line";
+
+    if (feedback.matched === null) {
+      line.classList.add("live-grading-line--unknown");
+    } else if (feedback.matched) {
+      line.classList.add("live-grading-line--matched");
+    } else {
+      line.classList.add("live-grading-line--missed");
+    }
+
+    line.textContent = describeFeedback(feedback);
+    wrapper.append(line);
+  }
+
+  return wrapper;
+}
+
+// Session tally: graded decisions, how many matched the engine, and net EV delta
+// (0 = perfect, negative = leaked). A session runs from the last New game.
+function createSessionScoreboard(session) {
+  const strip = document.createElement("dl");
+  strip.className = "session-scoreboard";
+
+  const decisions = Number(session.decisions) || 0;
+  const matched = Number(session.matched) || 0;
+  const accuracy = decisions > 0 ? Math.round((matched / decisions) * 100) : null;
+
+  [
+    ["Graded", String(decisions)],
+    ["Matched", decisions > 0 ? `${matched}/${decisions} (${accuracy}%)` : "--"],
+    ["Net", formatSignedBb(session.evDeltaBb).replace(/^EV /, "")],
+  ].forEach(([label, value]) => {
+    const cell = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    cell.append(term, description);
+    strip.append(cell);
+  });
+
+  return strip;
+}
+
+function describeFeedback(feedback) {
+  const handLabel = feedback.hand ? `${feedback.hand} ` : "";
+  const actionLabel = formatActionLabel(feedback.heroAction);
+  const recommendedLabel = formatActionLabel(feedback.recommended);
+  const spotLabel = feedback.spot ? ` (${feedback.spot})` : "";
+
+  if (feedback.matched === null) {
+    return `${handLabel}${actionLabel}${spotLabel} - no chart for the engine to grade.`;
+  }
+
+  if (feedback.matched) {
+    return `${handLabel}${actionLabel}${spotLabel} - matched the engine (${recommendedLabel}).`;
+  }
+
+  const delta = formatSignedBb(feedback.evDeltaBb);
+  const reason = feedback.reason ? ` - ${feedback.reason}` : "";
+  return `${handLabel}${actionLabel}${spotLabel} - missed (engine: ${recommendedLabel}, ${delta})${reason}.`;
+}
+
+function formatActionLabel(action) {
+  if (!action) {
+    return "no action";
+  }
+
+  return {
+    raise: "raise",
+    threeBet: "3-bet",
+    fourBet: "4-bet",
+    call: "call",
+    check: "check",
+    fold: "fold",
+    bet: "bet",
+  }[action] || action;
+}
+
+function formatSignedBb(value) {
+  const number = Number(value) || 0;
+  const rounded = Math.round(number * 10) / 10;
+  if (rounded === 0) {
+    return "EV 0.0 bb";
+  }
+
+  const sign = rounded > 0 ? "+" : "-";
+  return `EV ${sign}${Math.abs(rounded).toFixed(1)} bb`;
 }

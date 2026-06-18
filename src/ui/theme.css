@@ -1497,6 +1497,63 @@ input:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.live-grading-panel {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid rgba(247, 244, 237, 0.14);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.session-scoreboard {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+
+.session-scoreboard div {
+  display: grid;
+  gap: 2px;
+}
+
+.session-scoreboard dt {
+  color: var(--brass);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.session-scoreboard dd {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-grading-line {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border-left: 3px solid rgba(247, 244, 237, 0.3);
+  padding-left: 8px;
+}
+
+.live-grading-line--matched {
+  border-left-color: rgba(142, 211, 134, 0.9);
+  color: #d6ffd1;
+}
+
+.live-grading-line--missed {
+  border-left-color: rgba(195, 74, 61, 0.9);
+  color: #ffd1cc;
+}
+
+.live-grading-line--unknown {
+  border-left-color: rgba(201, 162, 39, 0.7);
+  color: #f3e6bf;
+}
+
 .coach-explain {
   display: grid;
   gap: 8px;
@@ -2073,4 +2130,29 @@ input:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+.live-grading-panel {
+  display: grid;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(247, 244, 237, 0.12);
+}
+
+.live-grading-line {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.live-grading-line--matched {
+  color: #d6ffd1;
+}
+
+.live-grading-line--missed {
+  color: #ffd1cc;
+}
+
+.live-grading-line--unknown {
+  color: var(--muted);
 }

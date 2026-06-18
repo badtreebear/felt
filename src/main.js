@@ -52,6 +52,7 @@ import { createPlayer, loadRoster, mergeImportedRoster, normalizePlayer, saveRos
 import { resolveSeatProfilesForHand } from "./roster/weights.js";
 import { scorePreflopDecision } from "./tracker/preflop-leaks.js";
 import { scorePostflopEvDecision, scorePostflopSizing } from "./tracker/postflop-leaks.js";
+import { normaliseDecision } from "./engine/decision-eval.js";
 import { buildHandRecord, createHandRecordId } from "./tracker/recording.js";
 import { loadHandsForHero, saveHandRecord } from "./tracker/store.js";
 import { summarizeHands } from "./tracker/stats.js";
@@ -138,6 +139,7 @@ const actions = {
       draft.hand.postflop = null;
       draft.hand.trackerRecordId = draft.activeHeroId ? createHandRecordId(draft.activeHeroId, hand.seed) : "";
       draft.hand.trackerDecisions = [];
+      draft.hand.lastFeedback = null;
       draft.ui.awaitingStart = false;
       draft.ui.revealVillains = false;
       draft.ui.openPopover = null;
@@ -191,10 +193,12 @@ const actions = {
       draft.hand.startingStacks = {};
       draft.hand.trackerRecordId = "";
       draft.hand.trackerDecisions = [];
+      draft.hand.lastFeedback = null;
       draft.ui.awaitingStart = true;
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
       draft.ui.revealVillains = false;
+      resetSession(draft); // a session is "since New game"
       resetCoachHandState(draft);
     });
   },
@@ -221,6 +225,7 @@ const actions = {
       draft.activeHeroId = hero.id;
       draft.tracker.selectedLeakType = "";
       draft.ui.trackerImportStatus = null;
+      draft.hand.lastFeedback = null;
     });
     await refreshTrackerData(hero.id);
     return hero;
@@ -238,6 +243,7 @@ const actions = {
       if (draft.hand.seed) {
         draft.hand.trackerRecordId = createHandRecordId(id, draft.hand.seed);
         draft.hand.trackerDecisions = [];
+        draft.hand.lastFeedback = null;
       }
     });
     void refreshTrackerData(id);
@@ -806,6 +812,14 @@ const actions = {
       draft.ui.displayUnit = displayUnit;
     });
   },
+  setSessionEnabled(enabled) {
+    updateState((draft) => {
+      draft.session.enabled = Boolean(enabled);
+      // Toggling live grading starts (or clears) a fresh session tally.
+      resetSession(draft);
+      draft.hand.lastFeedback = null;
+    });
+  },
   setActionDelayMs(actionDelayMs) {
     updateState((draft) => {
       draft.ui.actionDelayMs = cleanAmount(actionDelayMs);
@@ -832,6 +846,9 @@ const actions = {
       }, { autoActionLimit });
       if (decision) {
         draft.hand.trackerDecisions = [...(draft.hand.trackerDecisions || []), decision];
+        if (draft.session.enabled) {
+          recordSessionDecision(draft, normaliseDecision(decision));
+        }
       }
       applyPreflopToDraft(draft, preflop);
       draft.hand.postflop = null;
@@ -879,6 +896,14 @@ const actions = {
       const decisions = [callFoldDecision, sizingDecision].filter(Boolean);
       if (decisions.length) {
         draft.hand.trackerDecisions = [...(draft.hand.trackerDecisions || []), ...decisions];
+        if (draft.session.enabled) {
+          // Sizing decisions are review flags with no EV; show the most
+          // recent decision with a number (call/fold) when one exists, else
+          // the sizing flag.
+          const lastWithEv = [...decisions].reverse().find((d) => typeof d.evCall === "number");
+          const last = lastWithEv || decisions[decisions.length - 1];
+          recordSessionDecision(draft, normaliseDecision(last));
+        }
       }
       applyPostflopToDraft(draft, postflop);
       draft.ui.openPopover = null;
@@ -890,6 +915,29 @@ const actions = {
     void recordCurrentHandIfTerminal();
   },
 };
+
+// Live-grading session aggregation. `evDeltaBb` from normaliseDecision is signed
+// (0 = matched the engine's best line, negative = leak); ungraded "no chart"
+// decisions are shown but not scored.
+function recordSessionDecision(draft, feedback) {
+  draft.hand.lastFeedback = feedback;
+
+  if (!feedback || feedback.matched === null) {
+    return;
+  }
+
+  draft.session.decisions += 1;
+  if (feedback.matched) {
+    draft.session.matched += 1;
+  }
+  draft.session.evDeltaBb = Math.round((draft.session.evDeltaBb + (Number(feedback.evDeltaBb) || 0)) * 10) / 10;
+}
+
+function resetSession(draft) {
+  draft.session.decisions = 0;
+  draft.session.matched = 0;
+  draft.session.evDeltaBb = 0;
+}
 
 async function initializeTracker() {
   updateState((draft) => {

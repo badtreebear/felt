@@ -223,6 +223,7 @@ function createSettingsPanel(state, actions, { scriptedMode }) {
     }),
     createActionSpeedControl(state, actions),
     createRevealVillainsControl(state, actions),
+    createLiveGradingControl(state, actions),
   ];
 
   if (state.ui.spotMode === "manual") {
@@ -269,6 +270,24 @@ function createRevealVillainsControl(state, actions) {
 
   revealLabel.append(revealInput, revealText);
   return revealLabel;
+}
+
+function createLiveGradingControl(state, actions) {
+  const label = document.createElement("label");
+  label.className = "toggle toggle--inline";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(state.session?.enabled);
+  input.addEventListener("change", (event) => {
+    actions.setSessionEnabled(event.currentTarget.checked);
+  });
+
+  const text = document.createElement("span");
+  text.textContent = "Live grading";
+
+  label.append(input, text);
+  return label;
 }
 
 function bindSettingsDismissal(wrapper, state, actions) {

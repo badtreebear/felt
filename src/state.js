@@ -33,6 +33,13 @@ export const state = {
     postflop: null,
     trackerRecordId: "",
     trackerDecisions: [],
+    lastFeedback: null,
+  },
+  session: {
+    enabled: false,
+    decisions: 0,
+    matched: 0,
+    evDeltaBb: 0,
   },
   maths: {
     heroEquity: null,
