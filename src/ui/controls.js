@@ -5,6 +5,7 @@ import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { baseProfilePercent } from "../roster/weights.js";
 import { STREET_ORDER } from "../state.js";
+import { leakStreet } from "../drill/selection.js";
 import { createCoachSettingsPanel } from "./coach-settings.js";
 
 let removeSettingsDismissal = null;
@@ -424,6 +425,27 @@ function createCategoryList(categories, totalField, totalVerb, state, actions) {
 
     button.append(name, meta);
     item.append(button);
+
+    if (totalVerb === "lost") {
+      const drill = document.createElement("button");
+      drill.type = "button";
+      drill.className = "tracker-leak__drill";
+      drill.textContent = "Drill this";
+      drill.title = `Replay your ${category.leakType} spots and play them again`;
+      drill.addEventListener("click", () => actions.startDrill(category.leakType));
+      item.append(drill);
+
+      // Generated practice is preflop-only in v1 (postflop needs board filtering).
+      if (leakStreet(state.tracker.hands, category.leakType) === "preflop") {
+        const generate = document.createElement("button");
+        generate.type = "button";
+        generate.className = "tracker-leak__drill tracker-leak__generate";
+        generate.textContent = "Generate";
+        generate.title = `Practice ${category.leakType} on fresh random hands`;
+        generate.addEventListener("click", () => actions.startDrill(category.leakType, "generated"));
+        item.append(generate);
+      }
+    }
 
     if (state.tracker.selectedLeakType === category.leakType) {
       item.append(createLeakExamples(category.examples || [], category.leakType, state, actions));

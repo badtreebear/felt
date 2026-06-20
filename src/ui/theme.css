@@ -2156,3 +2156,84 @@ input:focus-visible {
 .live-grading-line--unknown {
   color: var(--muted);
 }
+
+.tracker-leak__drill {
+  margin-top: 6px;
+  min-height: 30px;
+  border: 1px solid rgba(201, 162, 39, 0.55);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #fff4d6;
+  background: rgba(201, 162, 39, 0.16);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tracker-leak__generate {
+  margin-left: 6px;
+  border-color: rgba(142, 211, 134, 0.5);
+  background: rgba(142, 211, 134, 0.16);
+  color: #d6ffd1;
+}
+
+.drill-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(201, 162, 39, 0.6);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: rgba(201, 162, 39, 0.1);
+}
+
+.drill-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.drill-panel__header strong {
+  color: var(--brass);
+  font-size: 1rem;
+}
+
+.drill-panel__progress {
+  margin: 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.drill-panel__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #d9d2c2;
+}
+
+.drill-panel__summary {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.drill-panel__next {
+  justify-self: start;
+  min-height: 34px;
+  border: 1px solid rgba(201, 162, 39, 0.7);
+  border-radius: 6px;
+  padding: 0 14px;
+  color: #071714;
+  background: var(--brass);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.drill-panel__end {
+  min-height: 30px;
+  border: 1px solid rgba(247, 244, 237, 0.36);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #f7f4ed;
+  background: transparent;
+  cursor: pointer;
+}

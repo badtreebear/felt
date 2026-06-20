@@ -59,6 +59,7 @@ import { summarizeHands } from "./tracker/stats.js";
 import { renderControls } from "./ui/controls.js";
 import { renderTable } from "./ui/table.js";
 import { betTipTopic, engineTipText } from "./ui/chips.js";
+import { collectDrillSpots, leakStreet } from "./drill/selection.js";
 import "./ui/theme.css";
 
 const app = document.querySelector("#app");
@@ -198,6 +199,7 @@ const actions = {
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
       draft.ui.revealVillains = false;
+      draft.drill = { active: false, mode: "history", leakType: "", targetStreet: "", spots: [], index: 0, results: [], awaitingNext: false };
       resetSession(draft); // a session is "since New game"
       resetCoachHandState(draft);
     });
@@ -820,6 +822,73 @@ const actions = {
       draft.hand.lastFeedback = null;
     });
   },
+  startDrill(leakType, mode = "history") {
+    const generated = mode === "generated";
+    const spots = generated ? [] : collectDrillSpots(state.tracker.hands, leakType);
+    const targetStreet = generated ? (leakStreet(state.tracker.hands, leakType) || "preflop") : "";
+
+    if (!generated && !spots.length) {
+      return;
+    }
+
+    updateState((draft) => {
+      draft.drill = {
+        active: true,
+        mode: generated ? "generated" : "history",
+        leakType,
+        targetStreet,
+        spots,
+        index: 0,
+        results: [],
+        awaitingNext: false,
+      };
+      // Drills force live grading on so each spot is scored.
+      draft.session.enabled = true;
+      resetSession(draft);
+      draft.hand.lastFeedback = null;
+      draft.ui.trackerOpen = false; // leave the tracker panel for the table
+    });
+
+    // History replays the exact seed; generated deals a fresh random hand.
+    actions.dealNewHand(generated ? undefined : spots[0].seed);
+  },
+  drillAdvance() {
+    if (state.drill.mode === "generated") {
+      updateState((draft) => {
+        draft.drill.index += 1;
+        draft.drill.awaitingNext = false;
+        draft.hand.lastFeedback = null;
+      });
+      actions.dealNewHand(); // another fresh random hand
+      return;
+    }
+
+    const next = state.drill.index + 1;
+
+    if (next >= state.drill.spots.length) {
+      // No spots left — move the index past the end so the panel shows a summary.
+      updateState((draft) => {
+        draft.drill.index = next;
+        draft.drill.awaitingNext = false;
+      });
+      return;
+    }
+
+    updateState((draft) => {
+      draft.drill.index = next;
+      draft.drill.awaitingNext = false;
+      draft.hand.lastFeedback = null;
+    });
+
+    actions.dealNewHand(state.drill.spots[next].seed);
+  },
+  endDrill() {
+    updateState((draft) => {
+      draft.drill = { active: false, mode: "history", leakType: "", targetStreet: "", spots: [], index: 0, results: [], awaitingNext: false };
+      draft.session.enabled = false;
+      draft.hand.lastFeedback = null;
+    });
+  },
   setActionDelayMs(actionDelayMs) {
     updateState((draft) => {
       draft.ui.actionDelayMs = cleanAmount(actionDelayMs);
@@ -847,7 +916,9 @@ const actions = {
       if (decision) {
         draft.hand.trackerDecisions = [...(draft.hand.trackerDecisions || []), decision];
         if (draft.session.enabled) {
-          recordSessionDecision(draft, normaliseDecision(decision));
+          const feedback = normaliseDecision(decision);
+          recordSessionDecision(draft, feedback);
+          captureDrillResult(draft, feedback);
         }
       }
       applyPreflopToDraft(draft, preflop);
@@ -902,7 +973,9 @@ const actions = {
           // the sizing flag.
           const lastWithEv = [...decisions].reverse().find((d) => typeof d.evCall === "number");
           const last = lastWithEv || decisions[decisions.length - 1];
-          recordSessionDecision(draft, normaliseDecision(last));
+          const feedback = normaliseDecision(last);
+          recordSessionDecision(draft, feedback);
+          captureDrillResult(draft, feedback);
         }
       }
       applyPostflopToDraft(draft, postflop);
@@ -937,6 +1010,36 @@ function resetSession(draft) {
   draft.session.decisions = 0;
   draft.session.matched = 0;
   draft.session.evDeltaBb = 0;
+}
+
+// During a drill, capture the result of the decision made on the leak's street
+// (preflop decisions carry "preflop"), then pause for the player to advance.
+function captureDrillResult(draft, feedback) {
+  const drill = draft.drill;
+
+  if (!drill.active || drill.awaitingNext || !feedback) {
+    return;
+  }
+
+  const generated = drill.mode === "generated";
+  const spot = generated ? null : drill.spots[drill.index];
+
+  if (!generated && !spot) {
+    return;
+  }
+
+  const targetStreet = generated ? drill.targetStreet : spot.street;
+
+  if (targetStreet && feedback.street && feedback.street !== targetStreet) {
+    return; // not the drilled decision yet (e.g. an earlier street)
+  }
+
+  drill.results = [...drill.results, {
+    seed: generated ? (draft.hand.seed || "") : spot.seed,
+    matched: feedback.matched === true,
+    evDeltaBb: Number(feedback.evDeltaBb) || 0,
+  }];
+  drill.awaitingNext = true;
 }
 
 async function initializeTracker() {
@@ -1011,6 +1114,10 @@ async function refreshTrackerData(heroId = state.activeHeroId) {
 }
 
 async function recordCurrentHandIfTerminal() {
+  if (state.drill.active) {
+    return; // replayed drill hands are practice, not real history
+  }
+
   const record = buildHandRecord(state);
 
   if (!record || recordedHandIds.has(record.id)) {

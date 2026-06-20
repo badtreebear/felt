@@ -568,11 +568,13 @@ function createHandPanel(state, showdown, actions) {
   const completionCue = createCompletionCue(state, actions);
   const coachPanel = createCoachPanel(state, actions, { handComplete: isTerminalHand(state) });
 
+  const drillPanel = createDrillPanel(state, actions);
   const bustBanner = createBustBanner(state, actions);
+  const lead = drillPanel ? [heading, drillPanel] : [heading];
   if (bustBanner) {
-    panel.append(heading, bustBanner, meta);
+    panel.append(...lead, bustBanner, meta);
   } else {
-    panel.append(heading, meta);
+    panel.append(...lead, meta);
   }
 
   if (heroControls) {
@@ -1158,6 +1160,80 @@ function clampAmount(value, min, max) {
   }
 
   return Math.min(Math.max(number, min), max);
+}
+
+// Drill panel: a guided sequence of replayed leak spots. Shows progress and the
+// advance/end controls; the per-decision grade renders in the live-grading panel
+// below (drills force live grading on). Returns null when no drill is running.
+function createDrillPanel(state, actions) {
+  const drill = state?.drill;
+
+  if (!drill?.active) {
+    return null;
+  }
+
+  const generated = drill.mode === "generated";
+  const total = drill.spots.length;
+  const matched = drill.results.filter((result) => result.matched).length;
+  const answered = drill.results.length;
+  const done = !generated && drill.index >= total;
+
+  const panel = document.createElement("section");
+  panel.className = "drill-panel";
+  panel.setAttribute("aria-label", "Drill");
+
+  const header = document.createElement("div");
+  header.className = "drill-panel__header";
+
+  const title = document.createElement("strong");
+  title.textContent = `${generated ? "Generated drill" : "Drill"}: ${drill.leakType}`;
+
+  const end = document.createElement("button");
+  end.type = "button";
+  end.className = "drill-panel__end";
+  end.textContent = "End drill";
+  end.addEventListener("click", () => actions.endDrill());
+
+  header.append(title, end);
+  panel.append(header);
+
+  if (done) {
+    const summary = document.createElement("p");
+    summary.className = "drill-panel__summary";
+    summary.textContent = `Done - matched the engine on ${matched}/${answered} spot${answered === 1 ? "" : "s"}.`;
+
+    const finish = document.createElement("button");
+    finish.type = "button";
+    finish.className = "drill-panel__next";
+    finish.textContent = "Finish";
+    finish.addEventListener("click", () => actions.endDrill());
+
+    panel.append(summary, finish);
+    return panel;
+  }
+
+  const progress = document.createElement("p");
+  progress.className = "drill-panel__progress";
+  progress.textContent = generated
+    ? `Spot ${drill.index + 1}  -  ${matched}/${answered} matched`
+    : `Spot ${drill.index + 1} of ${total}  -  ${matched}/${answered} matched so far`;
+  panel.append(progress);
+
+  if (drill.awaitingNext) {
+    const next = document.createElement("button");
+    next.type = "button";
+    next.className = "drill-panel__next";
+    next.textContent = !generated && drill.index + 1 >= total ? "See results" : "Next spot";
+    next.addEventListener("click", () => actions.drillAdvance());
+    panel.append(next);
+  } else {
+    const hint = document.createElement("p");
+    hint.className = "drill-panel__hint";
+    hint.textContent = "Play the spot - your decision is graded below.";
+    panel.append(hint);
+  }
+
+  return panel;
 }
 
 // Live-grading panel: shows the most recent hero decision's matched/missed

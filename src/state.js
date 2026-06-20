@@ -41,6 +41,16 @@ export const state = {
     matched: 0,
     evDeltaBb: 0,
   },
+  drill: {
+    active: false,
+    mode: "history",
+    leakType: "",
+    targetStreet: "",
+    spots: [],
+    index: 0,
+    results: [],
+    awaitingNext: false,
+  },
   maths: {
     heroEquity: null,
     equityCI: null,
