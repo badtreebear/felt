@@ -361,6 +361,105 @@ const actions = {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   },
+  async importAllData(payload) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      updateState((draft) => {
+        draft.ui.dataImportStatus = {
+          kind: "error",
+          message: "Import failed. Choose a valid Felt backup file.",
+        };
+      });
+      return;
+    }
+
+    // Table config + display prefs. (These aren't persisted across reloads, but
+    // restoring them keeps the imported session consistent with the backup.)
+    updateState((draft) => {
+      const config = payload.config || {};
+      if (Number.isFinite(config.players)) {
+        draft.config.players = config.players;
+        draft.config.heroSeat = Math.floor(config.players / 2);
+      }
+      if (Number.isFinite(config.stack)) {
+        draft.config.stack = config.stack;
+      }
+      if (Number.isFinite(config.bbDollarValue)) {
+        draft.config.bbDollarValue = config.bbDollarValue;
+      }
+      if (typeof config.startStreet === "string") {
+        draft.config.startStreet = config.startStreet;
+      }
+      draft.config.tableStacks = defaultStacksForPlayers(draft.config.players, draft.config.stack);
+      ensureSeatProfiles(draft.config);
+
+      const ui = payload.ui || {};
+      if (typeof ui.displayUnit === "string") {
+        draft.ui.displayUnit = ui.displayUnit;
+      }
+      if (Number.isFinite(ui.actionDelayMs)) {
+        draft.ui.actionDelayMs = cleanAmount(ui.actionDelayMs);
+      }
+    });
+
+    // Coach / AI setup — restore everything EXCEPT the API key, which is never
+    // written to a backup (security). The base URL + model carry over so the
+    // user only has to paste their key once on the new machine.
+    if (payload.coach && typeof payload.coach === "object") {
+      const { apiKey: _ignoredApiKey, ...coachWithoutKey } = payload.coach;
+      actions.setCoachConfig(coachWithoutKey);
+    }
+
+    // Known players (roster) — merged with anything already present.
+    let rosterAdded = 0;
+    if (Array.isArray(payload.roster)) {
+      const rosterResult = actions.rosterImport(payload.roster);
+      rosterAdded = rosterResult?.added || 0;
+    }
+
+    // Heroes + their tracked hands. A backup nests hands under each hero
+    // ({ hero, hands }); flatten them and remap to the freshly-saved hero IDs.
+    const heroEntries = Array.isArray(payload.heroes) ? payload.heroes : [];
+    const sourceHeroes = heroEntries.map((entry) => entry?.hero).filter(Boolean);
+    const flatHands = heroEntries.flatMap((entry) => (Array.isArray(entry?.hands) ? entry.hands : []));
+
+    let heroesAdded = 0;
+    let handsAdded = 0;
+
+    if (sourceHeroes.length) {
+      const result = mergeImportedHeroes(state.heroes, { heroes: sourceHeroes });
+      const savedHeroes = [];
+      for (const hero of result.imported) {
+        savedHeroes.push(await saveHero(hero));
+      }
+
+      handsAdded = await importHandsForHeroes({
+        payload: { hands: flatHands },
+        sourceHeroes,
+        importedHeroes: savedHeroes,
+      });
+      heroesAdded = savedHeroes.filter(Boolean).length;
+
+      const activeHeroId = savedHeroes[0]?.id || state.activeHeroId;
+      saveActiveHeroId(activeHeroId);
+      updateState((draft) => {
+        draft.heroes = result.heroes;
+        draft.activeHeroId = activeHeroId;
+      });
+      await refreshTrackerData(activeHeroId);
+    }
+
+    updateState((draft) => {
+      draft.ui.dataImportStatus = {
+        kind: "success",
+        message: `Imported ${rosterAdded} player${rosterAdded === 1 ? "" : "s"}, ${heroesAdded} hero${heroesAdded === 1 ? "" : "es"} (${handsAdded} hand${handsAdded === 1 ? "" : "s"}) and AI settings. Re-enter your AI API key in Coach to finish.`,
+      };
+    });
+  },
+  setDataImportStatus(dataImportStatus) {
+    updateState((draft) => {
+      draft.ui.dataImportStatus = dataImportStatus;
+    });
+  },
   async heroImport(payload) {
     const sourceHeroes = importedHeroEntries(payload);
     const result = mergeImportedHeroes(state.heroes, payload);

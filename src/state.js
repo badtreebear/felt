@@ -83,6 +83,7 @@ export const state = {
     showSetupTypes: false,
     trackerOpen: false,
     trackerImportStatus: null,
+    dataImportStatus: null,
   },
   tracker: {
     hands: [],

@@ -204,7 +204,7 @@ function createSettingsPanel(state, actions, { scriptedMode }) {
     createSettingsSection("Gameplay", gameplayControls),
     createSettingsSection("Display", [createPhaseFourSettings(state, actions)]),
     createSettingsSection("Coach", [createCoachSettingsPanel(state, actions, { embedded: true })]),
-    createSettingsSection("Data", [createBackupButton(actions)]),
+    createSettingsSection("Data", [createDataTools(state, actions)]),
   );
 
   return panel;
@@ -217,6 +217,57 @@ function createBackupButton(actions) {
   button.innerHTML = '<i data-lucide="download" aria-hidden="true"></i><span>Backup all data</span>';
   button.addEventListener("click", () => actions.backupSettings());
   return button;
+}
+
+// Backup + Import for the whole app (known players, heroes/hands, AI setup, and
+// table prefs). The API key is never in a backup, so import restores the AI base
+// URL + model and the user re-enters their key once.
+function createDataTools(state, actions) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "data-tools";
+
+  const importInput = document.createElement("input");
+  importInput.type = "file";
+  importInput.accept = ".json,application/json";
+  importInput.className = "roster-import-input";
+  importInput.setAttribute("aria-label", "Import Felt backup JSON");
+
+  const importButton = document.createElement("button");
+  importButton.type = "button";
+  importButton.className = "roster-tool-button";
+  importButton.innerHTML = '<i data-lucide="upload" aria-hidden="true"></i><span>Import all data</span>';
+  importButton.addEventListener("click", () => importInput.click());
+
+  importInput.addEventListener("change", async (event) => {
+    const file = event.currentTarget.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      await actions.importAllData(JSON.parse(await file.text()));
+    } catch {
+      actions.setDataImportStatus?.({
+        kind: "error",
+        message: "Import failed. Choose a valid Felt backup JSON file.",
+      });
+    } finally {
+      event.currentTarget.value = "";
+    }
+  });
+
+  wrapper.append(createBackupButton(actions), importButton, importInput);
+
+  if (state.ui.dataImportStatus?.message) {
+    const status = document.createElement("p");
+    status.className = "roster-file-status";
+    status.classList.toggle("roster-file-status--error", state.ui.dataImportStatus.kind === "error");
+    status.textContent = state.ui.dataImportStatus.message;
+    wrapper.append(status);
+  }
+
+  return wrapper;
 }
 
 function createSettingsSection(title, controls) {
