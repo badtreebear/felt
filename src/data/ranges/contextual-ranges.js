@@ -48,8 +48,28 @@ export function getRangeForSpot({ players, seat, position, hand }) {
 
   const contextTitle = `${position} vs ${openerPosition} open`;
 
-  if (preflop.raiseCount !== 1 || hasOtherCallerAfterOpen({ preflop, targetSeat: seat, openerSeat })) {
-    return fallbackOpeningRange(openingRange, `${contextTitle} - no chart for this spot yet`);
+  // Facing a 3-bet/4-bet (the pot was re-raised before this seat acts). The
+  // heads-up defend chart only covers a single raise, so explain that rather
+  // than implying the whole spot is uncharted.
+  if (preflop.raiseCount !== 1) {
+    const raiseLabel = preflop.raiseCount >= 3 ? "4-bet+" : "3-bet";
+    return fallbackOpeningRange(
+      openingRange,
+      `${contextTitle}, facing a ${raiseLabel}`,
+      null,
+      `${position} is facing a ${raiseLabel} after the ${openerPosition} open - no chart for this re-raised spot yet. The ${position} vs ${openerPosition} defend chart only covers a single open.`,
+    );
+  }
+
+  // Multiway: another player cold-called the open, so this is no longer the
+  // heads-up defend spot the chart models.
+  if (hasOtherCallerAfterOpen({ preflop, targetSeat: seat, openerSeat })) {
+    return fallbackOpeningRange(
+      openingRange,
+      `${contextTitle}, multiway`,
+      null,
+      `Multiway pot - another player called the ${openerPosition} open, so the heads-up ${position} vs ${openerPosition} defend chart no longer applies.`,
+    );
   }
 
   if (vsRfiChartError) {
@@ -196,14 +216,14 @@ function titledOpeningRange(openingRange, title, kind) {
   };
 }
 
-function fallbackOpeningRange(openingRange, title, error = null) {
+function fallbackOpeningRange(openingRange, title, error = null, message = null) {
   return {
     ...openingRange,
     kind: "fallback",
     title: openingRange.chartAvailable ? `${title}; showing ${openingRange.displayPosition} RFI` : title,
-    message: openingRange.chartAvailable
+    message: message || (openingRange.chartAvailable
       ? `No defend chart for this spot yet. Showing ${openingRange.displayPosition} RFI.`
-      : "No chart for this spot yet.",
+      : "No chart for this spot yet."),
     error,
   };
 }

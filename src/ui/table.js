@@ -106,12 +106,23 @@ function createBoard(state, showdown) {
 // Pre-calculated seat positions for crowded counts where the ellipse formula
 // places seats too close together near the shoulders of the oval.
 // [visualIndex] → [x%, y%] — percentage of the seats container (hero = index 0).
+// NOTE: these are authored counter-clockwise; seatXY() mirrors the x-axis so the
+// table actually runs CLOCKWISE (BTN → SB → BB → ...).
+const SEAT_POSITIONS_6 = [
+  [50, 85], // hero — bottom centre
+  [81, 67], // bottom right
+  [81, 33], // upper right
+  [50, 24], // top centre  (lowered ~50% closer to the board info box)
+  [19, 33], // upper left
+  [19, 67], // bottom left
+];
+
 const SEAT_POSITIONS_8 = [
   [50, 89], // hero — bottom centre
   [72, 81], // bottom right
   [91, 54], // right
   [80, 24], // top right
-  [50, 27], // top centre  (moved ~50% closer to centre vs original 9%)
+  [50, 24], // top centre  (lowered ~50% closer to the board info box)
   [20, 24], // top left
   [ 9, 54], // left
   [28, 81], // bottom left
@@ -122,14 +133,23 @@ const SEAT_POSITIONS_9 = [
   [71, 82], // bottom right
   [90, 56], // right
   [83, 22], // top right
-  [63, 27], // top right-centre  (moved ~50% closer to centre vs original 9%)
-  [37, 27], // top left-centre
+  [63, 24], // top right-centre  (lowered ~50% closer to the board info box)
+  [37, 24], // top left-centre
   [17, 22], // top left
   [10, 56], // left
   [29, 82], // bottom left
 ];
 
 function seatXY(visualIndex, players) {
+  const [x, y] = baseSeatXY(visualIndex, players);
+  // Mirror horizontally so increasing seat order runs CLOCKWISE around the
+  // table (BTN → SB → BB → ...). Authored layouts above are counter-clockwise;
+  // hero stays centred because 100 - 50 = 50.
+  return [100 - x, y];
+}
+
+function baseSeatXY(visualIndex, players) {
+  if (players === 6) return SEAT_POSITIONS_6[visualIndex];
   if (players === 8) return SEAT_POSITIONS_8[visualIndex];
   if (players === 9) return SEAT_POSITIONS_9[visualIndex];
   const angle = 90 - visualIndex * (360 / players);
