@@ -43,6 +43,28 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # When triggered by a tag (e.g. v0.3.0), stamp that version into the files
+      # the bundler reads, so the .msi/.exe/.dmg filenames match the tag instead
+      # of the hardcoded 0.1.0. No effect on manual (workflow_dispatch) runs.
+      - name: Set version from tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Stamping version $VERSION"
+          node -e '
+            const fs = require("fs");
+            const v = process.argv[1];
+            for (const f of ["package.json", "src-tauri/tauri.conf.json"]) {
+              const o = JSON.parse(fs.readFileSync(f, "utf8"));
+              o.version = v;
+              fs.writeFileSync(f, JSON.stringify(o, null, 2) + "\n");
+            }
+            const cargo = "src-tauri/Cargo.toml";
+            const t = fs.readFileSync(cargo, "utf8").replace(/^version = ".*"/m, `version = "${v}"`);
+            fs.writeFileSync(cargo, t);
+          ' "$VERSION"
+
       - name: Install frontend dependencies
         run: npm ci
 

@@ -220,6 +220,12 @@ function coachStatusText(state) {
     return "Coach disabled. Trainer is fully functional offline.";
   }
 
+  // Surface a poll/connection failure even before a model is chosen, so
+  // "Poll and test" never fails silently.
+  if (state.coach.testStatus === "error" && state.coach.lastError) {
+    return `Coach offline - ${state.coach.lastError}`;
+  }
+
   if (!state.coach.config.model) {
     return state.coach.availableModels.length
       ? "Choose a model, then test it."
