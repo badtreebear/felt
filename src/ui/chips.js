@@ -4,6 +4,9 @@ import { legalPostflopActions } from "../engine/postflop-action.js";
 import { recommendHeroSize } from "../engine/bet-sizing.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { getOpeningRange } from "../data/ranges/opening-ranges.js";
+import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
+import { canonicalHandKey } from "../engine/player-model.js";
+import { recommendedAction } from "../tracker/preflop-leaks.js";
 import { isCoachConfigured, isCoachReachable } from "../coach/config.js";
 import { formatAmount } from "./formatting.js";
 import { heroRangeVerdict } from "./range-grid.js";
@@ -338,18 +341,42 @@ function heroEngineTip(state) {
       action = "Working out a size — equity is still simulating.";
     }
   } else if (state?.hand?.preflop?.status === "waitingHero" && state?.hand?.street === "preflop") {
-    const verdict = preflopOpenVerdict(state);
+    // Use the chart for the ACTUAL spot (open / defend-vs-raise / vs-3-bet) —
+    // the same authority the tracker grades on — not just the RFI opening range.
+    const chart = preflopChartRecommendation(state);
 
-    if (verdict === "raise") {
-      action = "Raise (open) — this hand is in your RFI range.";
-    } else if (verdict === "fold") {
-      action = "Fold — this hand is outside your RFI range.";
-    } else if (verdict === "mixed") {
-      action = "Borderline — a mixed open/fold hand.";
+    if (chart.action === "raise") {
+      action = "Raise (open) — this hand is in your opening range.";
+    } else if (chart.action === "threeBet") {
+      action = "Raise (3-bet) — this hand 3-bets in this spot.";
+    } else if (chart.action === "fourBet") {
+      action = "Raise (4-bet) — this hand 4-bets in this spot.";
+    } else if (chart.action === "call") {
+      action = "Call — this hand defends in this spot.";
+    } else if (chart.action === "fold") {
+      action = `Fold — this hand is outside your range ${chart.spot ? `(${chart.spot})` : "for this spot"}.`;
+    } else {
+      // No chart for this spot (e.g. multiway / unsupported) — fall back to the
+      // RFI read when first in; otherwise leave it to the pot-odds verdict below.
+      const verdict = preflopOpenVerdict(state);
+
+      if (verdict === "raise") {
+        action = "Raise (open) — this hand is in your RFI range.";
+      } else if (verdict === "fold") {
+        action = "Fold — this hand is outside your RFI range.";
+      } else if (verdict === "mixed") {
+        action = "Borderline — a mixed open/fold hand.";
+      }
     }
 
+    // Pot odds are the immediate price only. When the chart says fold but the
+    // raw price says call, name the gap instead of implying a call is fine.
     if (facingBet && maths.verdict) {
-      detail = `By the engine numbers, calling is ${maths.verdict}.`;
+      if (chart.action === "fold" && maths.verdict === "call") {
+        detail = "The raw pot odds clear the bar, but out of position this hand realizes little of that equity and is easily dominated — so the disciplined play is to fold.";
+      } else {
+        detail = `By the immediate pot odds, calling is ${maths.verdict}.`;
+      }
     }
   }
 
@@ -406,6 +433,31 @@ function preflopOpenVerdict(state) {
     return "mixed";
   }
   return "raise";
+}
+
+// The chart-driven recommendation for the hero's CURRENT preflop spot — open,
+// defend-vs-raise, or vs-3-bet — using the same lookup + mapping the tracker
+// grades on, so the bet tip and the leak grader never disagree. Returns an
+// action of "raise" | "threeBet" | "fourBet" | "call" | "fold" | "unknown".
+function preflopChartRecommendation(state) {
+  const positions = getSeatPositions({
+    players: state.config.players,
+    buttonSeat: state.hand.buttonSeat,
+  });
+  const heroSeat = state.config.heroSeat;
+  const position = positions[heroSeat];
+  const handKey = canonicalHandKey(state.hand.holeCards?.[heroSeat] || []);
+  const range = getRangeForSpot({
+    players: state.config.players,
+    seat: heroSeat,
+    position,
+    hand: state.hand,
+  });
+
+  return {
+    action: recommendedAction({ range, handKey }),
+    spot: range.title || `${position} preflop`,
+  };
 }
 
 function betTipBody(state, actions) {

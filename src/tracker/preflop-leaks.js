@@ -56,7 +56,7 @@ function normalizeHeroAction({ preflop, action }) {
   return callAmount > 0 ? "call" : "check";
 }
 
-function recommendedAction({ range, handKey }) {
+export function recommendedAction({ range, handKey }) {
   if (!handKey || !range?.chartAvailable || range.kind === "fallback") {
     return "unknown";
   }

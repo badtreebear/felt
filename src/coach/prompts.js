@@ -38,8 +38,11 @@ export function buildBetTipMessages({ snapshot }) {
       role: "user",
       content: [
         "Give a short bet tip for the spot in this snapshot.",
-        "State the recommended action (fold, check, call, bet, or raise) and a size if betting or raising.",
-        "The engine recommendation and numbers in the snapshot are authoritative — agree with them and explain why in plain language.",
+        "The snapshot's `recommendation` field is the engine's authoritative line for this spot — state that action (fold, check, call, bet, or raise), with a size if betting or raising.",
+        "The equity, pot-odds, and EV numbers describe the immediate price only. Preflop, a hand can beat the pot-odds threshold yet still be a fold because it plays poorly out of position and realizes little of its raw equity.",
+        "If the recommendation differs from what the raw pot odds suggest, follow the recommendation and explain that gap in plain language — do not tell the player to call just because equity beats the pot-odds number.",
+        "Note: the snapshot's engine.verdict is only the raw pot-odds call/fold and is NOT the recommendation; defer to the recommendation field.",
+        "Do not invent or recompute numbers.",
         "Keep it under about 80 words.",
       ].join(" "),
     },
