@@ -1,4 +1,4 @@
-import { BarChart3, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Trash2, Upload, Users } from "lucide";
+import { BarChart3, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Trash2, Upload, Users, Zap } from "lucide";
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
 import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig } from "./coach/config.js";
 import {
@@ -47,6 +47,7 @@ import {
   saveActiveHeroId,
   saveHero,
 } from "./heroes/store.js";
+import { PROFILE_IDS } from "./engine/player-model.js";
 import { applySeatAssignment } from "./roster/seat-assignments.js";
 import { createPlayer, loadRoster, mergeImportedRoster, normalizePlayer, saveRoster } from "./roster/store.js";
 import { resolveSeatProfilesForHand } from "./roster/weights.js";
@@ -62,6 +63,12 @@ import { betTipTopic, engineTipText } from "./ui/chips.js";
 import { collectDrillSpots, leakStreet } from "./drill/selection.js";
 import "./ui/theme.css";
 
+const WILD_NAMES = [
+  "Alice", "Bob", "Carrie", "Dave", "Emma", "Frank", "Grace", "Henry",
+  "Isla", "Jack", "Kate", "Liam", "Maya", "Noah", "Olivia", "Pete",
+  "Quinn", "Rosa", "Sam", "Tara", "Uma", "Vince", "Wendy", "Yuki",
+];
+
 const app = document.querySelector("#app");
 
 if (!app) {
@@ -73,11 +80,9 @@ if (!app) {
 app.innerHTML = `
   <div class="app-shell">
     <header class="app-header">
-      <div>
-        <p>Felt</p>
-        <h1>Texas Hold'em trainer</h1>
-      </div>
-      <span class="phase-badge">Phase 5: scripted postflop</span>
+      <h1>
+        <span class="app-title__brand">Felt</span><span class="app-title__sep">·</span><span class="app-title__sub">Texas Hold'em trainer</span>
+      </h1>
     </header>
     <div id="controls-root"></div>
     <div id="range-alert-root"></div>
@@ -97,6 +102,9 @@ const recordedHandIds = new Set();
 
 state.roster = loadRoster();
 state.coach.config = loadCoachConfig();
+if (state.coach.config.model && !state.coach.config.enabled) {
+  state.coach.config.enabled = true;
+}
 state.coach.status = coachStatus(state.coach.config);
 
 const actions = {
@@ -205,8 +213,11 @@ const actions = {
     });
   },
   startGame() {
-    // Begin the game from the setup state with the arranged seating.
     actions.dealNewHand(undefined, { resetStacks: true });
+    const target = state.config.startStreet || "preflop";
+    if (target !== "preflop") {
+      actions.setStreet(target);
+    }
   },
   rebuyHero() {
     // Top the hero back up to the starting stack (others keep their stacks).
@@ -306,6 +317,49 @@ const actions = {
   heroExport({ includeHands = true } = {}) {
     const hero = activeHero(state);
     return heroExportPayload(hero, includeHands ? state.tracker.hands : []);
+  },
+  async backupSettings() {
+    const heroData = await Promise.all(
+      state.heroes.map(async (hero) => {
+        const hands = await loadHandsForHero(hero.id);
+        return { hero, hands };
+      }),
+    );
+
+    const coachConfig = { ...state.coach.config };
+    if (coachConfig.apiKey) {
+      coachConfig.apiKey = "[set — not included in backup]";
+    }
+
+    const backup = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      config: {
+        players: state.config.players,
+        stack: state.config.stack,
+        bbDollarValue: state.config.bbDollarValue,
+        startStreet: state.config.startStreet,
+      },
+      ui: {
+        displayUnit: state.ui.displayUnit,
+        actionDelayMs: state.ui.actionDelayMs,
+      },
+      coach: coachConfig,
+      roster: state.roster,
+      heroes: heroData,
+    };
+
+    const date = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([`${JSON.stringify(backup, null, 2)}\n`], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `felt-backup-${date}.json`;
+    link.style.display = "none";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   },
   async heroImport(payload) {
     const sourceHeroes = importedHeroEntries(payload);
@@ -469,9 +523,34 @@ const actions = {
       draft.config.seatProfiles = seatProfiles;
       draft.config.seatModes = {};
       draft.config.seatAssignments = seatAssignments;
+      draft.config.seatNames = {};
     });
+  },
+  dealWildTable() {
+    const players = state.config.players;
+    const heroSeat = Math.floor(players / 2);
+    const seatProfiles = {};
+    const seatModes = {};
+    const seatNames = {};
+    const shuffledNames = [...WILD_NAMES].sort(() => Math.random() - 0.5);
+    let nameIdx = 0;
 
-    actions.dealNewHand();
+    for (let seat = 0; seat < players; seat += 1) {
+      if (seat === heroSeat) continue;
+      const profile = PROFILE_IDS[Math.floor(Math.random() * PROFILE_IDS.length)];
+      seatProfiles[String(seat)] = profile;
+      seatModes[String(seat)] = "wild";
+      seatNames[seat] = shuffledNames[nameIdx % shuffledNames.length];
+      nameIdx += 1;
+    }
+
+    updateState((draft) => {
+      draft.config.seatPlayers = {};
+      draft.config.seatProfiles = seatProfiles;
+      draft.config.seatModes = seatModes;
+      draft.config.seatAssignments = {};
+      draft.config.seatNames = seatNames;
+    });
   },
   setPlayers(players) {
     clearAutoActionTimer();
@@ -480,15 +559,16 @@ const actions = {
       draft.config.heroSeat = Math.floor(players / 2);
       draft.config.tableStacks = defaultStacksForPlayers(players, draft.config.stack);
       ensureSeatProfiles(draft.config);
+      draft.config.seatNames = {};
     });
-    actions.dealNewHand();
+    if (!state.ui.awaitingStart) {
+      actions.dealNewHand();
+    }
   },
   setStreet(street) {
-    if (state.hand.preflop) {
-      return;
-    }
-
     updateState((draft) => {
+      draft.hand.preflop = null;
+      draft.hand.postflop = null;
       draft.hand.street = street;
       draft.hand.board = boardForStreet(draft.hand.boardRunout, street);
       draft.hand.actionLog = actionLogForStreet(draft.hand, draft.config.heroSeat, street);
@@ -497,6 +577,21 @@ const actions = {
       refreshMaths(draft, { keepEquity: false });
     });
     queueEquitySimulation();
+  },
+  setStartStreet(street) {
+    updateState((draft) => {
+      draft.config.startStreet = street;
+    });
+  },
+  setSeatScale(scale) {
+    updateState((draft) => {
+      draft.ui.seatScale = scale;
+    });
+  },
+  setShowSetupTypes(value) {
+    updateState((draft) => {
+      draft.ui.showSetupTypes = value;
+    });
   },
   advanceStreet() {
     if (canContinueScriptedHand(state)) {
@@ -619,10 +714,12 @@ const actions = {
   },
   setCoachConfig(values) {
     const previousBaseUrl = state.coach.config.baseUrl;
-    const config = saveCoachConfig({
-      ...state.coach.config,
-      ...values,
-    });
+    // Auto-enable the coach whenever a model is configured.
+    const merged = { ...state.coach.config, ...values };
+    if (merged.model && !merged.enabled) {
+      merged.enabled = true;
+    }
+    const config = saveCoachConfig(merged);
 
     updateState((draft) => {
       draft.coach.config = config;
@@ -1370,6 +1467,7 @@ subscribe("*", () => {
       Users,
       BarChart3,
       Trash2,
+      Zap,
     },
   });
 });
@@ -1385,7 +1483,7 @@ initializeApp();
 
 async function initializeApp() {
   await initializeTracker();
-  actions.dealNewHand();
+  actions.newGame();
 
   // If the coach was already enabled + configured, test the saved connection on
   // load so it shows connected without a manual click (a health check, not a

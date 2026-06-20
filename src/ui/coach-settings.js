@@ -53,6 +53,11 @@ export function createCoachSettingsPanel(state, actions, { embedded = false } = 
     apiKeyField(state, actions),
   );
 
+  const insecureWarning = createInsecureUrlWarning(state.coach.config);
+  if (insecureWarning) {
+    panel.append(insecureWarning);
+  }
+
   const testRow = document.createElement("div");
   testRow.className = "coach-settings__test";
 
@@ -234,4 +239,15 @@ function coachStatusText(state) {
 
 function canTestConnection(state) {
   return Boolean(state.coach.config.enabled && state.coach.config.baseUrl);
+}
+
+function createInsecureUrlWarning(config) {
+  if (!config.apiKey || !config.baseUrl) return null;
+  const isLocalhost = /^https?:\/\/(localhost|127\.)/i.test(config.baseUrl);
+  if (isLocalhost || config.baseUrl.startsWith("https://")) return null;
+
+  const warning = document.createElement("p");
+  warning.className = "coach-settings__warning";
+  warning.textContent = "Warning: API key will be sent over an unencrypted HTTP connection. Use HTTPS or a localhost URL.";
+  return warning;
 }

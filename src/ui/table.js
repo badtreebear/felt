@@ -13,7 +13,8 @@ import { createMathsChips, shouldShowMathsPanel } from "./chips.js";
 import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
 import { createRangeGrid, heroRangeVerdict } from "./range-grid.js";
-import { createSeatAssignmentGrid } from "./controls.js";
+import { createHeroControl, createSeatAssignmentGrid, createSelectControl } from "./controls.js";
+import { STREET_ORDER } from "../state.js";
 import { rangePopoverPlacement } from "./range-popover-placement.js";
 
 const RANGE_CLOSE_DELAY_MS = 120;
@@ -38,6 +39,7 @@ export function renderTable(container, state, actions) {
   const table = document.createElement("section");
   table.className = "poker-table";
   table.setAttribute("aria-label", "Poker table");
+  table.style.setProperty("--seat-scale", String(state.ui.seatScale ?? 1));
 
   const showdown = state.hand.street === "showdown"
     ? resolveShowdown({ holeCards: showdownHoleCards(state), board: state.hand.board })
@@ -57,10 +59,13 @@ function createBoard(state, showdown) {
 
   const pot = document.createElement("div");
   pot.className = "pot";
+  const callLine = !handTerminal && state.hand.toCall > 0
+    ? `<em>Call ${formatAmount(state.hand.toCall, state)}</em>`
+    : `<em class="pot__placeholder" aria-hidden="true">&nbsp;</em>`;
   pot.innerHTML = `
     <span>${potLabel}</span>
     <strong>${formatAmount(state.hand.pot, state)}</strong>
-    ${!handTerminal && state.hand.toCall > 0 ? `<em>Call ${formatAmount(state.hand.toCall, state)}</em>` : ""}
+    ${callLine}
   `;
 
   const street = document.createElement("div");
@@ -77,7 +82,10 @@ function createBoard(state, showdown) {
   const result = document.createElement("div");
   result.className = "showdown-result";
 
-  if (showdown) {
+  if (state.ui.awaitingStart) {
+    result.textContent = " "; // reserve the row height
+    result.setAttribute("aria-hidden", "true");
+  } else if (showdown) {
     const winnerNames = showdown.winnerSeats.map((seat) => seatLabel(seat, state.config.heroSeat, state));
     const winnerVerb = winnerNames.length === 1 ? "wins" : "win";
     result.textContent = `${winnerNames.join(" + ")} ${winnerVerb} with ${showdown.winningDescription}`;
@@ -93,6 +101,42 @@ function createBoard(state, showdown) {
 
   board.append(pot, street, cards, result);
   return board;
+}
+
+// Pre-calculated seat positions for crowded counts where the ellipse formula
+// places seats too close together near the shoulders of the oval.
+// [visualIndex] → [x%, y%] — percentage of the seats container (hero = index 0).
+const SEAT_POSITIONS_8 = [
+  [50, 89], // hero — bottom centre
+  [72, 81], // bottom right
+  [91, 54], // right
+  [80, 24], // top right
+  [50, 27], // top centre  (moved ~50% closer to centre vs original 9%)
+  [20, 24], // top left
+  [ 9, 54], // left
+  [28, 81], // bottom left
+];
+
+const SEAT_POSITIONS_9 = [
+  [50, 89], // hero — bottom centre
+  [71, 82], // bottom right
+  [90, 56], // right
+  [83, 22], // top right
+  [63, 27], // top right-centre  (moved ~50% closer to centre vs original 9%)
+  [37, 27], // top left-centre
+  [17, 22], // top left
+  [10, 56], // left
+  [29, 82], // bottom left
+];
+
+function seatXY(visualIndex, players) {
+  if (players === 8) return SEAT_POSITIONS_8[visualIndex];
+  if (players === 9) return SEAT_POSITIONS_9[visualIndex];
+  const angle = 90 - visualIndex * (360 / players);
+  return [
+    50 + Math.cos((angle * Math.PI) / 180) * 36,
+    50 + Math.sin((angle * Math.PI) / 180) * 35,
+  ];
 }
 
 function createSeats(state, actions) {
@@ -116,9 +160,7 @@ function createSeats(state, actions) {
     const position = positions[seat];
     const showCards = isHero || state.ui.revealVillains || state.hand.street === "showdown";
     const visualIndex = (seat - heroSeat + players) % players;
-    const angle = 90 + visualIndex * (360 / players);
-    const x = 50 + Math.cos((angle * Math.PI) / 180) * 36;
-    const y = 50 + Math.sin((angle * Math.PI) / 180) * 35;
+    const [x, y] = seatXY(visualIndex, players);
 
     seatElement.className = "seat";
     seatElement.classList.toggle("seat--hero", isHero);
@@ -130,6 +172,10 @@ function createSeats(state, actions) {
     seatElement.classList.toggle("seat--popover-open", state.ui.openRangeSeat === seat);
     seatElement.style.setProperty("--seat-x", `${x}%`);
     seatElement.style.setProperty("--seat-y", `${y}%`);
+    // Top seats (y < 46%) anchor at their bottom so cards push them upward.
+    // Bottom seats (y > 62%) anchor at their top so cards push them downward.
+    const anchorY = y < 46 ? "-100%" : y > 62 ? "0%" : "-50%";
+    seatElement.style.setProperty("--seat-anchor-y", anchorY);
 
     const title = document.createElement("div");
     title.className = "seat__title";
@@ -143,14 +189,18 @@ function createSeats(state, actions) {
     const isOut = !isHero && Boolean(phase?.out?.[seat]);
     seatElement.classList.toggle("seat--out", isOut);
 
-    const baseName = seatPlayer ? seatPlayer.name : seatLabel(seat, heroSeat, state);
-    const name = document.createElement("strong");
-    name.textContent = isOut ? `${baseName} · Out` : baseName;
-
     const stack = document.createElement("span");
     stack.textContent = formatAmount(phase?.stacks?.[seat] ?? state.config.stack, state);
 
-    title.append(name, stack);
+    if (!isHero) {
+      const wildName = !seatPlayer ? (state.config.seatNames?.[seat] || null) : null;
+      const baseName = seatPlayer ? seatPlayer.name : wildName || seatLabel(seat, heroSeat, state);
+      const name = document.createElement("strong");
+      name.textContent = isOut ? `${baseName} · Out` : baseName;
+      title.append(name, stack);
+    } else {
+      title.append(stack);
+    }
 
     const cards = createCardRow(state.hand.holeCards[seat] || [], { hidden: !showCards });
 
@@ -224,6 +274,10 @@ function createProfileBadge({ seat, isHero, state, seatPlayer }) {
   const showProfile = !isHero && state.ui.showProfiles;
 
   if (!showProfile) {
+    return null;
+  }
+
+  if (state.config.seatModes?.[String(seat)] === "wild") {
     return null;
   }
 
@@ -501,16 +555,80 @@ function createHandPanel(state, showdown, actions) {
     const setup = document.createElement("div");
     setup.className = "setup-panel";
 
-    const text = document.createElement("p");
-    text.textContent = "Assign known players or types to the seats, then start the game.";
+    const heroRow = document.createElement("div");
+    heroRow.className = "setup-row";
+    heroRow.append(createHeroControl(state, actions));
+
+    const configRow = document.createElement("div");
+    configRow.className = "setup-row setup-row--config";
+    configRow.append(
+      createSelectControl({
+        id: "setup-players",
+        label: "Players",
+        value: String(state.config.players),
+        options: Array.from({ length: 8 }, (_, i) => ({ value: String(i + 2), label: String(i + 2) })),
+        onChange: (value) => actions.setPlayers(Number(value)),
+      }),
+      createSelectControl({
+        id: "setup-street",
+        label: "Practice from",
+        value: state.config.startStreet || "preflop",
+        options: STREET_ORDER.filter((s) => s !== "showdown").map((s) => ({
+          value: s,
+          label: STREET_LABELS[s],
+        })),
+        onChange: (street) => actions.setStartStreet(street),
+      }),
+    );
 
     const seatGrid = createSeatAssignmentGrid(state, actions);
     seatGrid.classList.add("setup-seats");
 
+    const dealRow = document.createElement("div");
+    dealRow.className = "setup-row setup-row--deal";
+
+    const pubBtn = document.createElement("button");
+    pubBtn.type = "button";
+    pubBtn.className = "button";
+    pubBtn.disabled = state.roster.length === 0;
+    pubBtn.title = "Fill seats with your known players.";
+    pubBtn.innerHTML = '<i data-lucide="users" aria-hidden="true"></i><span>Pub game</span>';
+    pubBtn.addEventListener("click", () => actions.dealHomeGame());
+
+    const wildBtn = document.createElement("button");
+    wildBtn.type = "button";
+    wildBtn.className = "button";
+    wildBtn.title = "Fill seats with random players.";
+    wildBtn.innerHTML = '<i data-lucide="zap" aria-hidden="true"></i><span>Wild Table</span>';
+    wildBtn.addEventListener("click", () => actions.dealWildTable());
+
+    const scaleRow = document.createElement("div");
+    scaleRow.className = "setup-row setup-row--scale";
+
+    const scaleLabel = document.createElement("label");
+    scaleLabel.className = "setup-scale-label";
+    scaleLabel.htmlFor = "setup-seat-scale";
+
+    const scaleLabelText = document.createElement("span");
+    scaleLabelText.textContent = "Seat size";
+
+    const scaleSlider = document.createElement("input");
+    scaleSlider.type = "range";
+    scaleSlider.id = "setup-seat-scale";
+    scaleSlider.min = "0.6";
+    scaleSlider.max = "1.4";
+    scaleSlider.step = "0.05";
+    scaleSlider.value = String(state.ui.seatScale ?? 1);
+    scaleSlider.addEventListener("input", (e) => actions.setSeatScale(Number(e.currentTarget.value)));
+
+    scaleLabel.append(scaleLabelText, scaleSlider);
+    scaleRow.append(scaleLabel);
+
     const start = createHeroActionButton("Start game", () => actions.startGame());
     start.classList.add("setup-start");
 
-    setup.append(text, seatGrid, start);
+    dealRow.append(pubBtn, wildBtn);
+    setup.append(heroRow, configRow, seatGrid, dealRow, scaleRow, start);
     panel.append(heading, setup);
     return panel;
   }

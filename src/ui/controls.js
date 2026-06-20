@@ -4,7 +4,6 @@ import { TRACKER_SUMMARY_TOPIC, trackerExampleTopic } from "../coach/tracker.js"
 import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { baseProfilePercent } from "../roster/weights.js";
-import { STREET_ORDER } from "../state.js";
 import { leakStreet } from "../drill/selection.js";
 import { createCoachSettingsPanel } from "./coach-settings.js";
 
@@ -20,8 +19,6 @@ export function renderControls(container, state, actions) {
   const controls = document.createElement("section");
   controls.className = "controls";
   controls.setAttribute("aria-label", "Hand controls");
-
-  controls.append(createHeroControl(state, actions));
 
   const dealButton = createButton({
     label: "Deal new hand",
@@ -54,13 +51,6 @@ export function renderControls(container, state, actions) {
     title: "Reset every seat to the starting stack and deal a fresh game.",
   });
 
-  const pubGameButton = createButton({
-    label: "Pub game",
-    icon: "users",
-    onClick: actions.dealHomeGame,
-    disabled: state.roster.length === 0,
-    title: "Seat your known players and deal a hand.",
-  });
 
   const trackerButton = createButton({
     label: "Tracker",
@@ -80,7 +70,7 @@ export function renderControls(container, state, actions) {
 
   const settings = createSettingsCogControl(state, actions, { scriptedMode });
 
-  controls.append(dealButton, nextButton, replayButton, newGameButton, pubGameButton, trackerButton, mathsButton, settings);
+  controls.append(dealButton, nextButton, replayButton, newGameButton, trackerButton, mathsButton, settings);
 
   container.append(controls);
   bindSettingsDismissal(settings, state, actions);
@@ -91,7 +81,7 @@ export function renderControls(container, state, actions) {
   container.append(createRosterManager(state, actions));
 }
 
-function createHeroControl(state, actions) {
+export function createHeroControl(state, actions) {
   const active = activeHero(state);
   const wrapper = document.createElement("form");
   wrapper.className = "hero-picker";
@@ -201,27 +191,6 @@ function createSettingsPanel(state, actions, { scriptedMode }) {
 
   const gameplayControls = [
     createModeControl(state, actions),
-    createSelectControl({
-      id: "players",
-      label: "Players",
-      value: String(state.config.players),
-      options: Array.from({ length: 8 }, (_, index) => {
-        const players = index + 2;
-        return { value: String(players), label: String(players) };
-      }),
-      onChange: (value) => actions.setPlayers(Number(value)),
-    }),
-    createSelectControl({
-      id: "street",
-      label: "Street",
-      value: state.hand.street,
-      options: STREET_ORDER.map((street) => ({
-        value: street,
-        label: STREET_LABELS[street],
-      })),
-      onChange: actions.setStreet,
-      disabled: scriptedMode,
-    }),
     createActionSpeedControl(state, actions),
     createRevealVillainsControl(state, actions),
     createLiveGradingControl(state, actions),
@@ -235,9 +204,19 @@ function createSettingsPanel(state, actions, { scriptedMode }) {
     createSettingsSection("Gameplay", gameplayControls),
     createSettingsSection("Display", [createPhaseFourSettings(state, actions)]),
     createSettingsSection("Coach", [createCoachSettingsPanel(state, actions, { embedded: true })]),
+    createSettingsSection("Data", [createBackupButton(actions)]),
   );
 
   return panel;
+}
+
+function createBackupButton(actions) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "roster-tool-button";
+  button.innerHTML = '<i data-lucide="download" aria-hidden="true"></i><span>Backup all data</span>';
+  button.addEventListener("click", () => actions.backupSettings());
+  return button;
 }
 
 function createSettingsSection(title, controls) {
@@ -1107,6 +1086,26 @@ function createPhaseFourSettings(state, actions) {
 }
 
 export function createSeatAssignmentGrid(state, actions) {
+  const hasWildSeats = Object.values(state.config.seatModes || {}).some((m) => m === "wild");
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "seat-assignment-grid-wrap";
+
+  if (hasWildSeats) {
+    const toggleRow = document.createElement("label");
+    toggleRow.className = "toggle toggle--inline setup-type-toggle";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = Boolean(state.ui.showSetupTypes);
+    checkbox.addEventListener("change", (e) => actions.setShowSetupTypes(e.currentTarget.checked));
+
+    const text = document.createElement("span");
+    text.textContent = "Show player types";
+    toggleRow.append(checkbox, text);
+    wrapper.append(toggleRow);
+  }
+
   const profileGrid = document.createElement("div");
   profileGrid.className = "profile-grid";
   const positions = state.hand.buttonSeat !== undefined
@@ -1119,16 +1118,33 @@ export function createSeatAssignmentGrid(state, actions) {
       continue;
     }
 
-    profileGrid.append(createSelectControl({
-      id: `profile-seat-${seat}`,
-      label: `Seat ${seat + 1} ${positions[seat] || ""}`.trim(),
-      value: seatAssignmentValue(state, seat),
-      options: seatOptions,
-      onChange: (value) => actions.setSeatAssignment(seat, value),
-    }));
+    const isWild = state.config.seatModes?.[String(seat)] === "wild";
+    const seatLabel = `Seat ${seat + 1} ${positions[seat] || ""}`.trim();
+
+    if (isWild && !state.ui.showSetupTypes) {
+      const nameLabel = document.createElement("div");
+      nameLabel.className = "seat-name-label";
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "seat-name-label__key";
+      labelSpan.textContent = seatLabel;
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "seat-name-label__value";
+      nameSpan.textContent = state.config.seatNames?.[seat] || "—";
+      nameLabel.append(labelSpan, nameSpan);
+      profileGrid.append(nameLabel);
+    } else {
+      profileGrid.append(createSelectControl({
+        id: `profile-seat-${seat}`,
+        label: seatLabel,
+        value: seatAssignmentValue(state, seat),
+        options: seatOptions,
+        onChange: (value) => actions.setSeatAssignment(seat, value),
+      }));
+    }
   }
 
-  return profileGrid;
+  wrapper.append(profileGrid);
+  return wrapper;
 }
 
 function seatAssignmentOptions(state) {
@@ -1225,7 +1241,7 @@ function createManualSpotControls(state, actions) {
   return group;
 }
 
-function createSelectControl({ id, label, value, options, onChange, disabled = false }) {
+export function createSelectControl({ id, label, value, options, onChange, disabled = false }) {
   const wrapper = document.createElement("label");
   wrapper.className = "field";
   wrapper.htmlFor = id;
