@@ -1,0 +1,4 @@
+Playing card SVGs generated from Adrian Kennard's (RevK) card generator:
+https://www.me.uk/cards/  (https://cards.revk.uk)
+Released into the public domain (CC0) — attribution appreciated, not required.
+Generated with: Poker size, Large index, standard red/black suits.

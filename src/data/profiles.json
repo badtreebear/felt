@@ -1,0 +1,38 @@
+{
+  "standard": {
+    "label": "Standard",
+    "rangeWidth": 1,
+    "aggression": 1,
+    "sizing": 1
+  },
+  "nit": {
+    "label": "Nit",
+    "rangeWidth": 0.7,
+    "aggression": 0.7,
+    "sizing": 1
+  },
+  "tag": {
+    "label": "TAG",
+    "rangeWidth": 0.95,
+    "aggression": 1.15,
+    "sizing": 1
+  },
+  "lag": {
+    "label": "LAG",
+    "rangeWidth": 1.35,
+    "aggression": 1.4,
+    "sizing": 1.1
+  },
+  "station": {
+    "label": "Station",
+    "rangeWidth": 1.4,
+    "aggression": 0.6,
+    "sizing": 0.9
+  },
+  "maniac": {
+    "label": "Maniac",
+    "rangeWidth": 1.6,
+    "aggression": 1.8,
+    "sizing": 1.3
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+public/full-preflop-charts.pdf
+.env
+.env.*
+
+# Local working notes (kept on disk, not published)
+notes/
+
+# Local agent + logs + Rust build output
+.claude/
+*.log
+src-tauri/target/
