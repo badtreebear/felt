@@ -1,6 +1,7 @@
 name: Build desktop apps
 
-# Builds UNSIGNED Windows (.msi/.exe) and macOS (.dmg/.app) installers.
+# Builds UNSIGNED Windows (.msi/.exe), macOS (.dmg/.app) and Linux
+# (.AppImage/.deb/.rpm) installers.
 # Run it manually from the Actions tab, or push a version tag like v0.1.0.
 # Artifacts are attached to a draft GitHub Release.
 
@@ -24,9 +25,28 @@ jobs:
           - platform: windows-latest
             rust-targets: ""
             args: ""
+          - platform: ubuntu-latest
+            rust-targets: ""
+            args: ""
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      # Linux-only: Tauri needs WebKitGTK and friends present before the Rust
+      # build. Windows/macOS runners ship the webview, so this step is skipped
+      # there. (ubuntu-latest is 24.04 -> webkit2gtk 4.1.)
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl wget file libssl-dev libxdo-dev
 
       - name: Set up Node
         uses: actions/setup-node@v4

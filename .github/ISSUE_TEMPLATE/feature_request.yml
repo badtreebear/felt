@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest an idea or improvement for Felt
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the idea! A little structure helps a lot — fill in what's relevant and skip what isn't.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that's hard or impossible today?
+      placeholder: e.g. I want to drill short-stack push/fold spots, but there's no tournament mode.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: Describe the feature or change you have in mind.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Felt does this touch?
+      options:
+        - Gameplay / engine
+        - Coach (AI feedback)
+        - Tracker / stats
+        - Drills
+        - UI / display
+        - Roster / heroes
+        - Other / not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you're using as a workaround?
+      description: How do you handle this today, if at all?
+    validations:
+      required: false
