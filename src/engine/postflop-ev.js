@@ -2,7 +2,7 @@ import { evCall, callVerdict } from "./ev.js";
 import { adjustedOpeningRange } from "./player-model.js";
 import { requiredEquity } from "./potodds.js";
 import { runEquitySimulation } from "./equity.js";
-import { expandPositionRange } from "./ranges.js";
+import { expandPositionRange, rangeToGrid } from "./ranges.js";
 
 const DEFAULT_POSTFLOP_EV_ITERATIONS = 6000;
 // This equity sim runs synchronously on the main thread inside the hero-action
@@ -151,6 +151,31 @@ export function villainRangesForPostflopDecision(postflop) {
       return {
         type: "range",
         range: expandPositionRange(adjusted.range),
+      };
+    });
+}
+
+// Display companion to villainRangesForPostflopDecision: the same assumed range
+// per live villain, but as a 13x13 weight grid (for the range-grid renderer)
+// rather than expanded combos (for the equity sim). Lets the UI show "what the
+// engine thinks each villain holds here" — the basis of the equity number.
+export function villainRangeGridsForSpot(postflop) {
+  if (!postflop) {
+    return [];
+  }
+
+  return Array.from({ length: postflop.players || 0 }, (_, seat) => seat)
+    .filter((seat) => seat !== postflop.heroSeat && !postflop.folded?.[seat])
+    .map((seat) => {
+      const position = postflop.positions?.[seat] || "";
+      const profile = postflop.seatProfiles?.[seat] || postflop.seatProfiles?.[String(seat)] || "standard";
+      const adjusted = adjustedOpeningRange({ position, profile });
+
+      return {
+        seat,
+        position,
+        profile,
+        grid: rangeToGrid(adjusted.range),
       };
     });
 }

@@ -23,11 +23,12 @@ export function createCoachPanel(state, actions) {
   panel.append(header);
 
   if (!isCoachReachable(state.coach)) {
+    // Don't lock the panel — a fresh chat/review request re-probes and can bring
+    // the coach back without a manual settings test.
     const offline = document.createElement("p");
     offline.className = "coach-offline";
-    offline.textContent = "Coach offline - trainer fully functional.";
+    offline.textContent = "Coach offline — it'll retry on your next request. Trainer fully functional.";
     panel.append(offline);
-    return panel;
   }
 
   const actionRow = document.createElement("div");
@@ -42,7 +43,7 @@ export function createCoachPanel(state, actions) {
     panel.append(createChat(state, actions));
   }
 
-  const review = createReview(state);
+  const review = createReview(state, actions);
   if (review) {
     panel.append(review);
   }
@@ -124,7 +125,7 @@ function createChat(state, actions) {
   return wrapper;
 }
 
-function createReview(state) {
+function createReview(state, actions) {
   if (state.coach.review.status !== "loading" && !state.coach.review.content) {
     return null;
   }
@@ -140,10 +141,27 @@ function createReview(state) {
   }
 
   if (state.coach.review.content) {
+    const header = document.createElement("div");
+    header.className = "coach-review__header";
+
+    const label = document.createElement("strong");
+    label.textContent = "Hand review";
+
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "coach-review__close";
+    close.title = "Hide review";
+    close.setAttribute("aria-label", "Hide review");
+    close.textContent = "X";
+    close.addEventListener("click", () => actions.dismissCoachReview());
+
+    header.append(label, close);
+
     const response = document.createElement("p");
     response.className = "coach-response";
     response.textContent = state.coach.review.content;
-    wrapper.append(response);
+
+    wrapper.append(header, response);
   }
 
   return wrapper;

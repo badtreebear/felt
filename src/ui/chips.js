@@ -1,15 +1,17 @@
 import { callVerdict } from "../engine/ev.js";
-import { finalPotAfterCall } from "../engine/potodds.js";
+import { finalPotAfterCall, breakevenFoldFraction, valueBluffRatio } from "../engine/potodds.js";
 import { legalPostflopActions } from "../engine/postflop-action.js";
 import { recommendHeroSize } from "../engine/bet-sizing.js";
 import { getSeatPositions } from "../engine/positions.js";
+import { villainRangeGridsForSpot } from "../engine/postflop-ev.js";
 import { getOpeningRange } from "../data/ranges/opening-ranges.js";
 import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
 import { canonicalHandKey } from "../engine/player-model.js";
 import { recommendedAction } from "../tracker/preflop-leaks.js";
-import { isCoachConfigured, isCoachReachable } from "../coach/config.js";
+import { isCoachConfigured } from "../coach/config.js";
+import { coachAskButton, coachOfflineNote } from "./coach-explain-control.js";
 import { formatAmount } from "./formatting.js";
-import { heroRangeVerdict } from "./range-grid.js";
+import { heroRangeVerdict, createMiniRangeGrid } from "./range-grid.js";
 import { createPopover } from "./popover.js";
 
 const CHIP_CONFIG = [
@@ -183,20 +185,20 @@ function coachExplainBody(id, state, actions) {
   const wrapper = document.createElement("div");
   wrapper.className = "coach-explain";
 
-  if (!isCoachReachable(state.coach)) {
-    wrapper.append(paragraph("Coach offline - trainer fully functional."));
-    return wrapper;
+  wrapper.append(coachAskButton({
+    state,
+    actions,
+    topic: id,
+    idleLabel: "Ask coach",
+    onAsk: () => actions.requestCoachExplain(id),
+  }));
+
+  const note = coachOfflineNote(state);
+  if (note) {
+    wrapper.append(note);
   }
 
   const explain = state.coach.explain?.[id] || { status: "idle", content: "" };
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "coach-explain__button";
-  button.disabled = explain.status === "loading";
-  button.textContent = explain.status === "loading" ? "Coach thinking..." : "Ask coach";
-  button.addEventListener("click", () => actions.requestCoachExplain(id));
-  wrapper.append(button);
-
   if (explain.content) {
     const response = paragraph(explain.content);
     response.className = "coach-response";
@@ -213,6 +215,7 @@ function equityBody(state) {
   const opponents = state.maths.opponentCount === 1 ? "1 random hand" : `${state.maths.opponentCount} random hands`;
 
   body.append(
+    definition("Equity = your share of the pot at showdown — how often this hand wins or chops if it ran out now."),
     paragraph(`${status}: ${formatPercent(state.maths.heroEquity)} vs ${opponents}.`),
     paragraph(`${state.maths.iterations || 0} runouts checked, ${exact}. Ties: ${formatPercent(state.maths.tieRate)}.`),
   );
@@ -227,6 +230,7 @@ function potOddsBody(state) {
   const finalPot = finalPotAfterCall(pot, call);
 
   body.append(
+    definition("Pot odds = the equity you need to call profitably — your call as a share of the final pot."),
     paragraph(`Required equity = call / (pot + bet + call).`),
     paragraph(`${formatAmount(call, state)} / (${formatAmount(pot, state)} + ${formatAmount(call, state)} + ${formatAmount(call, state)}) = ${formatPercent(state.maths.requiredEquity)}.`),
   );
@@ -246,6 +250,7 @@ function evBody(state) {
   const verdict = callVerdict({ equity, pot, toCall: call });
 
   body.append(
+    definition("EV = expected value: the average chips a decision wins or loses over the long run. Positive is profitable."),
     paragraph(`EV(call) = equity * final pot - call.`),
     paragraph(`${formatPercent(equity)} * ${formatAmount(finalPotAfterCall(pot, call), state)} - ${formatAmount(call, state)} = ${formatAmount(state.maths.evCall, state, { signed: true })}.`),
     paragraph(`Current engine verdict: ${verdict}.`),
@@ -257,6 +262,13 @@ function evBody(state) {
 function paragraph(text) {
   const element = document.createElement("p");
   element.textContent = text;
+  return element;
+}
+
+// A one-line, muted "what this stat means" header for the maths popovers.
+function definition(text) {
+  const element = paragraph(text);
+  element.className = "popover__def";
   return element;
 }
 
@@ -480,35 +492,144 @@ function betTipBody(state, actions) {
   }
   body.append(engineWrap);
 
+  // Phase 12 — make the engine's thinking visible: the fold equity / balance
+  // behind a bet, and the villain ranges behind the equity number.
+  const bluffMath = bluffMathSection(state);
+  if (bluffMath) {
+    body.append(bluffMath);
+  }
+
+  const villains = villainRangesSection(state);
+  if (villains) {
+    body.append(villains);
+  }
+
   // Coach overview is a button (like the equity / pot-odds / EV popovers) rather
   // than auto-firing, so the player chooses when to spend a coach call.
   if (isCoachConfigured(state.coach.config)) {
     const coachWrap = document.createElement("div");
     coachWrap.className = "coach-explain";
 
-    if (!isCoachReachable(state.coach)) {
-      coachWrap.append(paragraph("Coach offline — the engine tip above still applies."));
-    } else {
-      const explain = state.coach.explain?.[betTipTopic(state)] || { status: "idle", content: "" };
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "coach-explain__button";
-      button.disabled = explain.status === "loading";
-      button.textContent = explain.status === "loading" ? "Coach thinking..." : "Ask coach";
-      button.addEventListener("click", () => actions.requestBetTipCoach());
-      coachWrap.append(button);
+    const topic = betTipTopic(state);
+    coachWrap.append(coachAskButton({
+      state,
+      actions,
+      topic,
+      idleLabel: "Ask coach",
+      onAsk: () => actions.requestBetTipCoach(),
+    }));
 
-      if (explain.content) {
-        const response = paragraph(explain.content);
-        response.className = "coach-response";
-        coachWrap.append(response);
-      }
+    const note = coachOfflineNote(state);
+    if (note) {
+      coachWrap.append(note);
+    }
+
+    const explain = state.coach.explain?.[topic];
+    if (explain?.content) {
+      const response = paragraph(explain.content);
+      response.className = "coach-response";
+      coachWrap.append(response);
     }
 
     body.append(coachWrap);
   }
 
   return body;
+}
+
+// Fold equity + value:bluff balance for the engine's recommended bet. Shown only
+// when betting into the pot (mode "bet") — raises facing a bet make the one-shot
+// fold-equity read misleading, so we stay quiet there.
+function bluffMathSection(state) {
+  const postflop = state?.hand?.postflop;
+
+  if (!postflop || postflop.status !== "waitingHero") {
+    return null;
+  }
+
+  const rec = heroSizingRecommendation(state);
+
+  if (!rec || rec.status !== "ready" || rec.mode !== "bet") {
+    return null;
+  }
+
+  const pot = Number(state.hand.pot) || 0;
+  const bet = Number(rec.amount) || 0;
+
+  if (pot <= 0 || bet <= 0) {
+    return null;
+  }
+
+  const foldPct = breakevenFoldFraction({ pot, bet });
+  const balance = valueBluffRatio({ pot, bet });
+
+  const wrap = document.createElement("div");
+  wrap.className = "bet-tip__section";
+  wrap.append(sectionLabel("Bluffing math"));
+  wrap.append(paragraph(
+    `At ~${rec.fractionPct}% pot (${formatAmount(bet, state)}), a bluff needs them to fold about ${formatPercent(foldPct)} of the time to break even.`,
+  ));
+  if (balance) {
+    wrap.append(paragraph(
+      `A balanced betting range at this size is about ${formatRatio(balance.ratio)} value:bluff (${formatPercent(balance.bluffFraction)} bluffs).`,
+    ));
+  }
+
+  const note = paragraph("River heuristic — fold equity for this one bet, not a multi-street solve.");
+  note.className = "bet-tip__numbers";
+  wrap.append(note);
+
+  return wrap;
+}
+
+// Collapsible view of each live villain's assumed range — the position+profile
+// ranges the engine samples to produce your equity. Reuses the range-grid
+// renderer so it reads like the hero RFI chart.
+function villainRangesSection(state) {
+  const postflop = state?.hand?.postflop;
+
+  if (!postflop || postflop.status !== "waitingHero") {
+    return null;
+  }
+
+  const villains = villainRangeGridsForSpot(postflop);
+
+  if (!villains.length) {
+    return null;
+  }
+
+  const details = document.createElement("details");
+  details.className = "bet-tip__villains";
+
+  const summary = document.createElement("summary");
+  summary.textContent = villains.length === 1
+    ? "What the villain likely has"
+    : "What the villains likely have";
+  details.append(summary);
+
+  const intro = paragraph("The engine's assumed range behind your equity — by position and player type.");
+  intro.className = "bet-tip__numbers";
+  details.append(intro);
+
+  villains.forEach((villain) => {
+    const where = villain.position || `Seat ${villain.seat + 1}`;
+    details.append(createMiniRangeGrid({
+      grid: villain.grid,
+      label: `${where} · ${villain.profile}`,
+    }));
+  });
+
+  return details;
+}
+
+function formatRatio(ratio) {
+  const value = Number(ratio);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return "--";
+  }
+
+  return `${value.toFixed(1)}:1`;
 }
 
 function sectionLabel(text) {

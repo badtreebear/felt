@@ -82,6 +82,7 @@ export const state = {
     seatScale: 1,
     showSetupTypes: false,
     trackerOpen: false,
+    glossaryOpen: false,
     trackerImportStatus: null,
     dataImportStatus: null,
     pendingImport: null,

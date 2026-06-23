@@ -1,12 +1,13 @@
 import { STREET_LABELS } from "../engine/deck.js";
-import { PLAYER_PROFILES } from "../engine/player-model.js";
+import { PLAYER_PROFILES, canonicalHandKey } from "../engine/player-model.js";
 import { resolveShowdown } from "../engine/hand-eval.js";
 import { legalHeroActions } from "../engine/preflop-action.js";
 import { legalPostflopActions } from "../engine/postflop-action.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { hasWeightedProfiles } from "../roster/weights.js";
 import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
-import { getOpeningRange } from "../data/ranges/opening-ranges.js";
+import { recommendedAction } from "../tracker/preflop-leaks.js";
+import { drillSummary, isDrillComplete } from "../drill/session.js";
 import { createCard, createCardRow } from "./cards.js";
 import { createCoachPanel } from "./coach-panel.js";
 import { createMathsChips, shouldShowMathsPanel } from "./chips.js";
@@ -672,7 +673,7 @@ function createHandPanel(state, showdown, actions) {
   const heroRfi = heroRfiText(state);
 
   if (heroRfi) {
-    meta.append(createMeta("RFI", heroRfi));
+    meta.append(createMeta(heroRfi.label, heroRfi.text));
   }
 
   if (shouldShowMathsPanel(state) && Number(state.hand.toCall) > 0) {
@@ -1110,6 +1111,11 @@ function postflopStatusText(state) {
   return `${capitalize(postflop.street)} running`;
 }
 
+// The inline preflop hint near the action controls. Returns { label, text } so
+// the caller can title it for the actual spot, or null to stay quiet. Uses the
+// same spot-aware lookup + action mapping as the bet tip and the tracker grader
+// (getRangeForSpot + recommendedAction), so all three agree — opens, blind
+// defense, vs-raise, and vs-3-bet — rather than only showing the RFI read.
 function heroRfiText(state) {
   if (state.hand.street !== "preflop") {
     return null;
@@ -1119,35 +1125,48 @@ function heroRfiText(state) {
     players: state.config.players,
     buttonSeat: state.hand.buttonSeat,
   });
-  const heroPosition = positions[state.config.heroSeat];
+  const heroSeat = state.config.heroSeat;
+  const heroPosition = positions[heroSeat];
+  const heroCards = state.hand.holeCards[heroSeat] || [];
 
-  // A1: the BB is never an RFI/open spot — show no RFI hint rather than "no chart for BB".
-  if (heroPosition === "BB") {
+  const range = getRangeForSpot({
+    players: state.config.players,
+    seat: heroSeat,
+    position: heroPosition,
+    hand: state.hand,
+  });
+
+  // Folded to the BB (a check/walk) — no decision to train, stay quiet.
+  if (range.kind === "walk") {
     return null;
   }
 
-  const range = getOpeningRange({ players: state.config.players, position: heroPosition });
-
-  if (!range.chartAvailable) {
-    return range.message || "No RFI chart for this position yet.";
+  // RFI opens keep the three-way open / mixed / fold read off the opening grid.
+  if (range.kind === "rfi") {
+    if (!range.chartAvailable) {
+      return { label: "RFI", text: range.message || "No RFI chart for this position yet." };
+    }
+    if (range.isPlaceholder) {
+      return null;
+    }
+    const verdict = heroRangeVerdict(heroCards, range.grid);
+    if (verdict.status === "not in range") return { label: "RFI", text: "fold" };
+    if (verdict.status === "mixed") return { label: "RFI", text: "mixed" };
+    return { label: "RFI", text: "raise" };
   }
 
-  if (range.isPlaceholder) {
-    return null;
+  // Facing action: defend-vs-open or vs-3-bet. Map via the shared grader.
+  const action = recommendedAction({ range, handKey: canonicalHandKey(heroCards) });
+  const label = range.kind === "vs3bet" ? "Vs 3-bet" : "Defend";
+
+  switch (action) {
+    case "raise": return { label, text: "raise" };
+    case "threeBet": return { label, text: "3-bet" };
+    case "fourBet": return { label, text: "4-bet" };
+    case "call": return { label, text: "call" };
+    case "fold": return { label, text: "fold" };
+    default: return null; // fallback / no chart — the bet tip explains the spot
   }
-
-  const heroCards = state.hand.holeCards[state.config.heroSeat] || [];
-  const verdict = heroRangeVerdict(heroCards, range.grid);
-
-  if (verdict.status === "not in range") {
-    return "fold";
-  }
-
-  if (verdict.status === "mixed") {
-    return "mixed";
-  }
-
-  return "raise";
 }
 
 function currentPhaseState(state) {
@@ -1312,9 +1331,10 @@ function createDrillPanel(state, actions) {
 
   const generated = drill.mode === "generated";
   const total = drill.spots.length;
-  const matched = drill.results.filter((result) => result.matched).length;
-  const answered = drill.results.length;
-  const done = !generated && drill.index >= total;
+  const stats = drillSummary(drill);
+  const matched = stats.matched;
+  const answered = stats.total;
+  const done = isDrillComplete(drill);
 
   const panel = document.createElement("section");
   panel.className = "drill-panel";
@@ -1338,7 +1358,15 @@ function createDrillPanel(state, actions) {
   if (done) {
     const summary = document.createElement("p");
     summary.className = "drill-panel__summary";
-    summary.textContent = `Done - matched the engine on ${matched}/${answered} spot${answered === 1 ? "" : "s"}.`;
+    const extras = [];
+    if (stats.resurfaced) {
+      extras.push(`${stats.resurfaced} replayed after a miss`);
+    }
+    if (stats.evLostBb < 0) {
+      extras.push(`${Math.abs(stats.evLostBb)}bb EV lost`);
+    }
+    const tail = extras.length ? ` (${extras.join(", ")})` : "";
+    summary.textContent = `Done - matched the engine on ${matched}/${answered} spot${answered === 1 ? "" : "s"}${tail}.`;
 
     const finish = document.createElement("button");
     finish.type = "button";

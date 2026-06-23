@@ -50,6 +50,49 @@ export function createRangeGrid({ range, heroCards }) {
   return wrapper;
 }
 
+// A compact, read-only range grid for showing a villain's assumed holdings.
+// Unlike createRangeGrid it has no hero-hand verdict line and no chart source —
+// just a labelled 13x13 weight heatmap. `grid` is a numeric weight grid (e.g.
+// from rangeToGrid). Stays quiet if the grid is empty.
+export function createMiniRangeGrid({ grid, label }) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "range-grid-wrap range-grid-wrap--mini";
+
+  if (label) {
+    const caption = document.createElement("p");
+    caption.className = "range-verdict range-verdict--neutral";
+    caption.textContent = label;
+    wrapper.append(caption);
+  }
+
+  const gridEl = document.createElement("div");
+  gridEl.className = "range-grid range-grid--mini";
+  gridEl.setAttribute("role", "grid");
+  if (label) {
+    gridEl.setAttribute("aria-label", label);
+  }
+
+  RANKS.forEach((_, row) => {
+    RANKS.forEach((__, column) => {
+      const cell = document.createElement("span");
+      const value = grid?.[row]?.[column] ?? 0;
+      const weight = rangeCellWeight(value);
+      const cellLabel = rangeCellLabel(row, column);
+      cell.className = "range-cell";
+      cell.classList.toggle("range-cell--open", weight >= 1);
+      cell.classList.toggle("range-cell--mixed", weight > 0 && weight < 1);
+      cell.style.setProperty("--range-frequency", weight);
+      cell.setAttribute("role", "gridcell");
+      cell.setAttribute("aria-label", `${cellLabel} ${weight > 0 ? "in range" : "out of range"}`);
+      cell.textContent = cellLabel;
+      gridEl.append(cell);
+    });
+  });
+
+  wrapper.append(gridEl);
+  return wrapper;
+}
+
 export function heroRangeVerdict(heroCards, grid) {
   const cell = handCell(heroCards);
   const handLabel = cell ? rangeCellLabel(cell.row, cell.column) : "--";

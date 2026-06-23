@@ -2,6 +2,15 @@ import { isCoachConfigured, normalizeCoachConfig } from "./config.js";
 import { isBaseUrlAllowed } from "./providers.js";
 
 const DEFAULT_TIMEOUT_MS = 10000;
+// A working-but-slow model shouldn't be cut off early, so chat completions get a
+// generous ceiling. Failures that come back fast (under FAST_FAIL_MS) look like
+// flaps (dropped connection, transient 5xx) rather than a slow model, so we retry
+// those a couple of times with short backoff. Slow failures and auth/4xx errors
+// are not retried — waiting/hammering wouldn't help.
+const COMPLETION_TIMEOUT_MS = 45000;
+const FAST_FAIL_MS = 3000;
+const MAX_RETRIES = 2;
+const RETRY_BACKOFF_MS = [300, 800];
 
 export async function testCoachConnection(config, options = {}) {
   const normalized = normalizeCoachConfig(config);
@@ -87,8 +96,9 @@ export async function coachChatCompletion(config, messages, options = {}) {
     return failure("Coach is not configured.", "unconfigured");
   }
 
-  return requestJson({
+  return requestWithRetries({
     ...options,
+    timeoutMs: options.timeoutMs ?? COMPLETION_TIMEOUT_MS,
     config: normalized,
     path: "/chat/completions",
     init: {
@@ -119,6 +129,50 @@ export async function coachChatCompletion(config, messages, options = {}) {
       };
     },
   });
+}
+
+// Retry a request only when it fails FAST and for a reason a retry could fix
+// (a flap or transient 5xx/429) — never a slow/timed-out request or an auth/4xx.
+async function requestWithRetries({
+  retries = MAX_RETRIES,
+  sleep = defaultSleep,
+  ...params
+}) {
+  let attempt = 0;
+  let result;
+
+  for (;;) {
+    const startedAt = Date.now();
+    result = await requestJson(params);
+
+    if (result.ok) {
+      return result;
+    }
+
+    const elapsed = Date.now() - startedAt;
+    const retriable = elapsed < FAST_FAIL_MS && !result.timedOut && isRetriableStatus(result.httpStatus);
+
+    if (attempt >= retries || !retriable) {
+      return result;
+    }
+
+    await sleep(RETRY_BACKOFF_MS[Math.min(attempt, RETRY_BACKOFF_MS.length - 1)]);
+    attempt += 1;
+  }
+}
+
+// HTTP error codes worth retrying: server-side (5xx) and rate limiting (429).
+// A missing code means a network-level failure (no response) — also retriable.
+function isRetriableStatus(httpStatus) {
+  if (httpStatus === undefined || httpStatus === null) {
+    return true;
+  }
+
+  return httpStatus >= 500 || httpStatus === 429;
+}
+
+function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function requestJson({
@@ -152,12 +206,13 @@ async function requestJson({
     });
 
     if (!response.ok) {
-      return failure(await responseError(response, [config.apiKey]), "unreachable");
+      return failure(await responseError(response, [config.apiKey]), "unreachable", { httpStatus: response.status });
     }
 
     return parse(response);
   } catch (error) {
-    return failure(errorMessage(error), "unreachable");
+    const timedOut = timeout.timedOut || error?.name === "AbortError";
+    return failure(errorMessage(error), "unreachable", { timedOut });
   } finally {
     timeout.cleanup();
   }
@@ -188,15 +243,20 @@ function redact(text, redactions) {
 
 function timeoutSignal({ timeoutMs, AbortControllerImpl }) {
   if (!AbortControllerImpl) {
-    return { signal: undefined, cleanup: () => {} };
+    return { signal: undefined, cleanup: () => {}, timedOut: false };
   }
 
   const controller = new AbortControllerImpl();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return {
+  const handle = {
     signal: controller.signal,
     cleanup: () => clearTimeout(timer),
+    timedOut: false,
   };
+  const timer = setTimeout(() => {
+    handle.timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  return handle;
 }
 
 function errorMessage(error) {
@@ -207,11 +267,12 @@ function errorMessage(error) {
   return error?.message || "Coach request failed.";
 }
 
-function failure(error, status) {
+function failure(error, status, extra = {}) {
   return {
     ok: false,
     status,
     error,
+    ...extra,
   };
 }
 

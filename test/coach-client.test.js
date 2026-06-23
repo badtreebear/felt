@@ -91,19 +91,83 @@ describe("coach client", () => {
     expect(result.error).not.toContain("secret-key");
   });
 
-  it("turns aborts into a graceful timeout failure", async () => {
+  it("turns aborts into a graceful timeout failure and does not retry them", async () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";
     const fetchImpl = vi.fn(async () => {
       throw abort;
     });
-    const result = await coachChatCompletion(config, [{ role: "user", content: "Hi" }], { fetchImpl });
+    const sleep = vi.fn(async () => {});
+    const result = await coachChatCompletion(config, [{ role: "user", content: "Hi" }], { fetchImpl, sleep });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       status: "unreachable",
       error: "Coach request timed out.",
+      timedOut: true,
     });
+    // A timeout means it was slow, not flapping — retrying wouldn't help.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+});
+
+describe("coach client retries", () => {
+  const messages = [{ role: "user", content: "Explain EV." }];
+
+  it("retries a fast network failure and then succeeds", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        throw new Error("network down");
+      }
+      return okResponse({ choices: [{ message: { content: "Recovered." } }] });
+    });
+    const sleep = vi.fn(async () => {});
+    const result = await coachChatCompletion(config, messages, { fetchImpl, sleep });
+
+    expect(result.ok).toBe(true);
+    expect(result.content).toBe("Recovered.");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives up after the retry budget on persistent fast failures", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    const sleep = vi.fn(async () => {});
+    const result = await coachChatCompletion(config, messages, { fetchImpl, sleep });
+
+    expect(result.ok).toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+
+  it("retries a 5xx server error", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return { ok: false, status: 503, text: async () => "overloaded" };
+      }
+      return okResponse({ choices: [{ message: { content: "Back up." } }] });
+    });
+    const sleep = vi.fn(async () => {});
+    const result = await coachChatCompletion(config, messages, { fetchImpl, sleep });
+
+    expect(result.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a 4xx auth error", async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 401, text: async () => "bad key" }));
+    const sleep = vi.fn(async () => {});
+    const result = await coachChatCompletion(config, messages, { fetchImpl, sleep });
+
+    expect(result.ok).toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
   });
 });
 

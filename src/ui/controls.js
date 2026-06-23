@@ -1,11 +1,13 @@
 import { STREET_LABELS } from "../engine/deck.js";
-import { isCoachConfigured, isCoachReachable } from "../coach/config.js";
+import { isCoachConfigured } from "../coach/config.js";
+import { coachAskButton, coachOfflineNote } from "./coach-explain-control.js";
 import { TRACKER_SUMMARY_TOPIC, trackerExampleTopic } from "../coach/tracker.js";
 import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { baseProfilePercent } from "../roster/weights.js";
 import { leakStreet } from "../drill/selection.js";
 import { createCoachSettingsPanel } from "./coach-settings.js";
+import { STAT_GLOSSARY, createGlossaryPanel } from "./glossary.js";
 
 let removeSettingsDismissal = null;
 
@@ -68,12 +70,24 @@ export function renderControls(container, state, actions) {
     title: "Show EV, equity and pot odds for the current spot.",
   });
 
+  const glossaryButton = createButton({
+    label: "Glossary",
+    icon: "book-open",
+    onClick: () => actions.setGlossaryOpen(!state.ui.glossaryOpen),
+    highlight: Boolean(state.ui.glossaryOpen),
+    title: "Plain-language definitions of the maths and trainer terms.",
+  });
+
   const settings = createSettingsCogControl(state, actions, { scriptedMode });
 
-  controls.append(dealButton, nextButton, replayButton, newGameButton, trackerButton, mathsButton, settings);
+  controls.append(dealButton, nextButton, replayButton, newGameButton, trackerButton, mathsButton, glossaryButton, settings);
 
   container.append(controls);
   bindSettingsDismissal(settings, state, actions);
+
+  if (state.ui.glossaryOpen) {
+    container.append(createGlossaryPanel(actions));
+  }
 
   if (state.ui.trackerOpen) {
     container.append(createTrackerPanel(state, actions));
@@ -594,22 +608,22 @@ function createTrackerCoachSummary(state, actions) {
   const wrapper = document.createElement("div");
   wrapper.className = "tracker-coach";
 
-  if (!isCoachReachable(state.coach)) {
-    const offline = document.createElement("p");
-    offline.className = "tracker-coach__status";
-    offline.textContent = "Coach offline - trainer fully functional.";
-    wrapper.append(offline);
-    return wrapper;
+  wrapper.append(coachAskButton({
+    state,
+    actions,
+    topic: TRACKER_SUMMARY_TOPIC,
+    idleLabel: "Explain my leaks",
+    onAsk: () => actions.requestTrackerCoachSummary(),
+    className: "tracker-coach__button",
+    extraDisabled: !state.tracker.summary?.handsTracked,
+  }));
+
+  const note = coachOfflineNote(state, { className: "tracker-coach__status" });
+  if (note) {
+    wrapper.append(note);
   }
 
   const explain = state.coach.explain?.[TRACKER_SUMMARY_TOPIC] || { status: "idle", content: "" };
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "tracker-coach__button";
-  button.disabled = explain.status === "loading" || !state.tracker.summary?.handsTracked;
-  button.textContent = explain.status === "loading" ? "Coach thinking..." : "Explain my leaks";
-  button.addEventListener("click", () => actions.requestTrackerCoachSummary());
-  wrapper.append(button);
 
   if (explain.content) {
     const response = document.createElement("p");
@@ -719,7 +733,18 @@ function createStatsStrip(summary) {
     const item = document.createElement("div");
     const term = document.createElement("dt");
     const description = document.createElement("dd");
-    term.textContent = label;
+    const note = STAT_GLOSSARY[label];
+
+    if (note) {
+      const abbr = document.createElement("abbr");
+      abbr.className = "tracker-stat__term";
+      abbr.title = note;
+      abbr.textContent = label;
+      term.append(abbr);
+    } else {
+      term.textContent = label;
+    }
+
     description.textContent = value;
     item.append(term, description);
     strip.append(item);
@@ -774,19 +799,14 @@ function createTrackerExampleCoachAction({ example, leakType, state, actions }) 
     return null;
   }
 
-  const topic = trackerExampleTopic(example);
-  const explain = state.coach.explain?.[topic] || { status: "idle", content: "" };
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "tracker-example__explain";
-  button.disabled = explain.status === "loading" || !isCoachReachable(state.coach);
-  button.textContent = !isCoachReachable(state.coach)
-    ? "Coach offline"
-    : explain.status === "loading"
-      ? "Coach thinking..."
-      : "Explain this";
-  button.addEventListener("click", () => actions.requestTrackerCoachLeak(leakType, example.id || example.seed));
-  return button;
+  return coachAskButton({
+    state,
+    actions,
+    topic: trackerExampleTopic(example),
+    idleLabel: "Explain this",
+    onAsk: () => actions.requestTrackerCoachLeak(leakType, example.id || example.seed),
+    className: "tracker-example__explain",
+  });
 }
 
 function buildTypeSelect(value, { excludeIds = [] } = {}) {

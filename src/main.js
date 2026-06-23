@@ -1,6 +1,6 @@
 import { BarChart3, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Trash2, Upload, Users, Zap } from "lucide";
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
-import { coachStatus, isCoachConfigured, isCoachReachable, loadCoachConfig, saveCoachConfig, loadCoachSettings, saveCoachSettings, normalizeSavedCoachConfig, createCoachConfigId, normalizeCoachConfig } from "./coach/config.js";
+import { coachStatus, isCoachConfigured, loadCoachConfig, saveCoachConfig, loadCoachSettings, saveCoachSettings, normalizeSavedCoachConfig, createCoachConfigId, normalizeCoachConfig } from "./coach/config.js";
 import { clearCoachKey, loadCoachKey, setCoachKey } from "./coach/key-store.js";
 import {
   buildBetTipMessages,
@@ -62,6 +62,12 @@ import { renderControls } from "./ui/controls.js";
 import { renderTable } from "./ui/table.js";
 import { betTipTopic, engineTipText } from "./ui/chips.js";
 import { collectDrillSpots, leakStreet } from "./drill/selection.js";
+import {
+  advanceDrill,
+  createDrillSession,
+  emptyDrill,
+  recordDrillResult,
+} from "./drill/session.js";
 import "./ui/theme.css";
 
 const WILD_NAMES = [
@@ -211,7 +217,7 @@ const actions = {
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
       draft.ui.revealVillains = false;
-      draft.drill = { active: false, mode: "history", leakType: "", targetStreet: "", spots: [], index: 0, results: [], awaitingNext: false };
+      draft.drill = emptyDrill();
       resetSession(draft); // a session is "since New game"
       resetCoachHandState(draft);
     });
@@ -306,6 +312,11 @@ const actions = {
   setTrackerOpen(open) {
     updateState((draft) => {
       draft.ui.trackerOpen = open;
+    });
+  },
+  setGlossaryOpen(open) {
+    updateState((draft) => {
+      draft.ui.glossaryOpen = open;
     });
   },
   setTrackerLeak(leakType) {
@@ -924,7 +935,7 @@ const actions = {
     });
   },
   async requestBetTipCoach() {
-    if (!isCoachReachable(state.coach)) {
+    if (!isCoachConfigured(state.coach.config)) {
       return; // the popover shows an offline / not-configured note instead
     }
 
@@ -939,6 +950,18 @@ const actions = {
     const messages = buildBetTipMessages({ snapshot });
 
     await requestCoachMessages({ topic, messages, maxTokens: 180 });
+  },
+  dismissCoachExplain(topic) {
+    updateState((draft) => {
+      if (draft.coach.explain?.[topic]) {
+        draft.coach.explain[topic] = { status: "idle", content: "", error: "" };
+      }
+    });
+  },
+  dismissCoachReview() {
+    updateState((draft) => {
+      draft.coach.review = { status: "idle", content: "", error: "" };
+    });
   },
   setOpenRangeSeat(openRangeSeat) {
     updateState((draft) => {
@@ -1116,7 +1139,7 @@ const actions = {
       return;
     }
 
-    if (!isCoachReachable(state.coach)) {
+    if (!isCoachConfigured(state.coach.config)) {
       updateState((draft) => markCoachOffline(draft));
       return;
     }
@@ -1154,7 +1177,7 @@ const actions = {
     });
   },
   async requestCoachReview() {
-    if (!isCoachReachable(state.coach)) {
+    if (!isCoachConfigured(state.coach.config)) {
       updateState((draft) => markCoachOffline(draft));
       return;
     }
@@ -1249,16 +1272,7 @@ const actions = {
     }
 
     updateState((draft) => {
-      draft.drill = {
-        active: true,
-        mode: generated ? "generated" : "history",
-        leakType,
-        targetStreet,
-        spots,
-        index: 0,
-        results: [],
-        awaitingNext: false,
-      };
+      draft.drill = createDrillSession({ mode, leakType, targetStreet, spots });
       // Drills force live grading on so each spot is scored.
       draft.session.enabled = true;
       resetSession(draft);
@@ -1270,38 +1284,25 @@ const actions = {
     actions.dealNewHand(generated ? undefined : spots[0].seed);
   },
   drillAdvance() {
-    if (state.drill.mode === "generated") {
-      updateState((draft) => {
-        draft.drill.index += 1;
-        draft.drill.awaitingNext = false;
-        draft.hand.lastFeedback = null;
-      });
-      actions.dealNewHand(); // another fresh random hand
-      return;
-    }
-
-    const next = state.drill.index + 1;
-
-    if (next >= state.drill.spots.length) {
-      // No spots left — move the index past the end so the panel shows a summary.
-      updateState((draft) => {
-        draft.drill.index = next;
-        draft.drill.awaitingNext = false;
-      });
-      return;
-    }
+    let result = { done: true, seed: null };
 
     updateState((draft) => {
-      draft.drill.index = next;
-      draft.drill.awaitingNext = false;
-      draft.hand.lastFeedback = null;
+      result = advanceDrill(draft.drill);
+      if (!result.done) {
+        draft.hand.lastFeedback = null;
+      }
     });
 
-    actions.dealNewHand(state.drill.spots[next].seed);
+    if (result.done) {
+      return; // queue (incl. any resurfaced spots) exhausted — panel shows the summary
+    }
+
+    // History replays the next queued seed; generated deals a fresh random hand.
+    actions.dealNewHand(result.seed ?? undefined);
   },
   endDrill() {
     updateState((draft) => {
-      draft.drill = { active: false, mode: "history", leakType: "", targetStreet: "", spots: [], index: 0, results: [], awaitingNext: false };
+      draft.drill = emptyDrill();
       draft.session.enabled = false;
       draft.hand.lastFeedback = null;
     });
@@ -1451,12 +1452,13 @@ function captureDrillResult(draft, feedback) {
     return; // not the drilled decision yet (e.g. an earlier street)
   }
 
-  drill.results = [...drill.results, {
+  // Pass the raw matched value (true | false | null) so the controller can tell a
+  // genuine miss (resurface once) from a "no chart" non-decision (don't resurface).
+  recordDrillResult(drill, {
     seed: generated ? (draft.hand.seed || "") : spot.seed,
-    matched: feedback.matched === true,
-    evDeltaBb: Number(feedback.evDeltaBb) || 0,
-  }];
-  drill.awaitingNext = true;
+    matched: feedback.matched,
+    evDeltaBb: feedback.evDeltaBb,
+  });
 }
 
 async function initializeTracker() {
@@ -1707,7 +1709,10 @@ function nextCoachRequestId() {
 }
 
 async function requestCoachMessages({ topic, messages, maxTokens }) {
-  if (!isCoachReachable(state.coach)) {
+  // Attempt whenever the coach is configured — even if currently flagged offline.
+  // The request itself re-probes (client.js retries fast failures) and flips the
+  // status back to reachable on success, so a blip no longer needs a manual test.
+  if (!isCoachConfigured(state.coach.config)) {
     updateState((draft) => markCoachOffline(draft));
     return;
   }

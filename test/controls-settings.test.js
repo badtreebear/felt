@@ -40,7 +40,7 @@ describe("settings cog controls", () => {
     expect(calls).toContainEqual(["setSettingsOpen", false]);
   });
 
-  it("gates tracker coach buttons on configured and reachable coach state", () => {
+  it("gates tracker coach buttons on a configured coach, staying usable when offline", () => {
     const unconfigured = document.createElement("div");
 
     renderControls(unconfigured, sampleState({
@@ -65,8 +65,10 @@ describe("settings cog controls", () => {
       },
     }), actionSpy());
 
-    expect(textIncludes(offline, "Coach offline - trainer fully functional.")).toBe(true);
-    expect(textIncludes(offline, "Explain my leaks")).toBe(false);
+    // Offline-but-configured: the button stays available (a request re-probes and
+    // can recover) and a quiet retry note shows instead of a dead "offline" message.
+    expect(textIncludes(offline, "Explain my leaks")).toBe(true);
+    expect(textIncludes(offline, "Coach was offline — this will retry.")).toBe(true);
 
     const reachable = document.createElement("div");
     renderControls(reachable, sampleState({
