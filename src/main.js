@@ -53,7 +53,7 @@ import { applySeatAssignment } from "./roster/seat-assignments.js";
 import { createPlayer, loadRoster, mergeImportedRoster, normalizePlayer, saveRoster } from "./roster/store.js";
 import { resolveSeatProfilesForHand } from "./roster/weights.js";
 import { scorePreflopDecision } from "./tracker/preflop-leaks.js";
-import { scorePostflopEvDecision, scorePostflopSizing } from "./tracker/postflop-leaks.js";
+import { scorePostflopEvDecision, scorePostflopSizing, OVERSIZED_RATIO } from "./tracker/postflop-leaks.js";
 import { normaliseDecision } from "./engine/decision-eval.js";
 import { buildHandRecord, createHandRecordId } from "./tracker/recording.js";
 import { loadHandsForHero, saveHandRecord } from "./tracker/store.js";
@@ -1249,6 +1249,16 @@ const actions = {
       }
     });
   },
+  setShowThreats(value) {
+    updateState((draft) => {
+      draft.ui.showThreats = Boolean(value);
+    });
+  },
+  setOverbetWarn(value) {
+    updateState((draft) => {
+      draft.ui.overbetWarn = Boolean(value);
+    });
+  },
   setDisplayUnit(displayUnit) {
     updateState((draft) => {
       draft.ui.displayUnit = displayUnit;
@@ -1376,10 +1386,23 @@ const actions = {
         const postStack = Number(postflop?.stacks?.[heroSeat]) || 0;
         const committed = Math.max(0, Math.round((preStack - postStack) * 100) / 100);
         const allIn = postStack <= 0 && committed > 0;
-        const commitmentEval = allIn
+        // if-called equity vs the continuing range. Needed for the all-in "got
+        // it in light" read and for the oversized "overvalued your hand" check —
+        // computed only when one of those is in play, so normal bets pay no
+        // extra simulation.
+        const potForRatio = Math.max(0, Number(pre?.pot) || 0);
+        const oversized = potForRatio > 0 && committed / potForRatio >= OVERSIZED_RATIO;
+        const commitmentEval = (allIn || oversized)
           ? evaluateHeroCommitment({ hand: draft.hand, config: draft.config, postflop: pre, committed })
           : null;
-        sizingDecision = scorePostflopSizing({ postflop: pre, action, committed, allIn, commitmentEval });
+        sizingDecision = scorePostflopSizing({
+          postflop: pre,
+          action,
+          committed,
+          allIn,
+          commitmentEval,
+          board: draft.hand.board,
+        });
       }
 
       const decisions = [callFoldDecision, sizingDecision].filter(Boolean);

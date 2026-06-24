@@ -1,4 +1,5 @@
 import { canonicalHandKey } from "../engine/player-model.js";
+import { boardThreats } from "../engine/board-threats.js";
 
 export function scorePostflopEvDecision({ postflop, action, evaluation } = {}) {
   const toCall = Number(evaluation?.toCall ?? postflop?.heroToCall) || 0;
@@ -43,10 +44,18 @@ export function scorePostflopEvDecision({ postflop, action, evaluation } = {}) {
   };
 }
 
-const OVERSIZED_RATIO = 1.5;
+export const OVERSIZED_RATIO = 1.5;
 const UNDERSIZED_RATIO = 0.3;
 
-export function scorePostflopSizing({ postflop, action, committed, allIn, commitmentEval } = {}) {
+// "Overvalued your hand" thresholds (judgment — kept conservative). An oversized
+// bet is only the relative-strength leak when the hand is genuinely behind the
+// continuing range (low if-called equity) AND the board is dangerous (a made
+// hand already beats hero, or the texture is wet). A big bet with a strong hand
+// is just a value bet and must NOT be flagged.
+const OVERVALUE_EQUITY = 0.55;
+const OVERVALUE_WETNESS = 0.5;
+
+export function scorePostflopSizing({ postflop, action, committed, allIn, commitmentEval, board } = {}) {
   if (!postflop || (action !== "bet" && action !== "raise")) {
     return null;
   }
@@ -99,6 +108,30 @@ export function scorePostflopSizing({ postflop, action, committed, allIn, commit
   const ratio = pot > 0 ? commit / pot : 0;
 
   if (ratio >= OVERSIZED_RATIO) {
+    // Relative-strength check: is this big bet actually behind the board + range?
+    const equity = Number(commitmentEval?.equity);
+    const ev = Number(commitmentEval?.evCall);
+    const heroCards = postflop.holeCards?.[postflop.heroSeat] || [];
+    const { threats, wetness } = boardThreats(board || [], heroCards);
+    const beaten = threats.some((threat) => threat.beatsHero === true);
+    const dangerous = beaten || wetness >= OVERVALUE_WETNESS;
+    const weak = Number.isFinite(equity) && equity < OVERVALUE_EQUITY;
+
+    if (weak && dangerous) {
+      return baseDecision(postflop, action, commit, {
+        leak: true,
+        leakType: "overvalued your hand",
+        recommended: "pot control — respect the board",
+        equity: roundMetric(equity),
+        evCall: Number.isFinite(ev) ? roundMetric(ev) : null,
+        // Cost = how much the if-called EV is underwater (the chips you bloat in
+        // while behind). Falls back to 0 when EV is unavailable.
+        costBb: Number.isFinite(ev) && ev < 0 ? roundCost(Math.abs(ev)) : 0,
+      });
+    }
+
+    // Texture-neutral big bet (or strong hand): keep the lighter review flag so
+    // nothing regresses, but it is not the relative-strength leak.
     return baseDecision(postflop, action, commit, {
       leak: true,
       leakType: "oversized bet (review)",

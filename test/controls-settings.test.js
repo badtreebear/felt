@@ -40,6 +40,15 @@ describe("settings cog controls", () => {
     expect(calls).toContainEqual(["setSettingsOpen", false]);
   });
 
+  it("offers the relative-strength coaching aids in the settings drawer (off by default)", () => {
+    const container = document.createElement("div");
+
+    renderControls(container, sampleState({ ui: { settingsOpen: true } }), actionSpy());
+
+    expect(textIncludes(container, "Coaching aids")).toBe(true);
+    expect(textIncludes(container, "Warn me when I'm overbetting a weak hand")).toBe(true);
+  });
+
   it("gates tracker coach buttons on a configured coach, staying usable when offline", () => {
     const unconfigured = document.createElement("div");
 

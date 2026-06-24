@@ -229,6 +229,10 @@ function createSettingsPanel(state, actions, { scriptedMode }) {
   panel.append(
     createSettingsSection("Gameplay", gameplayControls),
     createSettingsSection("Display", [createPhaseFourSettings(state, actions)]),
+    createSettingsSection("Coaching aids", [
+      createShowThreatsControl(state, actions),
+      createOverbetWarnControl(state, actions),
+    ]),
     createSettingsSection("Coach", [createCoachSettingsPanel(state, actions, { embedded: true })]),
     createSettingsSection("Data", [createDataTools(state, actions)]),
   );
@@ -395,6 +399,45 @@ function createRevealVillainsControl(state, actions) {
 
   revealLabel.append(revealInput, revealText);
   return revealLabel;
+}
+
+// Phase 15 — opt-in in-game aids for relative hand strength. Default off so the
+// table stays clean; on, they surface "what beats you" and the overbet guard
+// without opening the Bet tip.
+function createShowThreatsControl(state, actions) {
+  const label = document.createElement("label");
+  label.className = "toggle toggle--inline";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(state.ui.showThreats);
+  input.addEventListener("change", (event) => {
+    actions.setShowThreats(event.currentTarget.checked);
+  });
+
+  const text = document.createElement("span");
+  text.textContent = "Show “what beats you” on the table";
+
+  label.append(input, text);
+  return label;
+}
+
+function createOverbetWarnControl(state, actions) {
+  const label = document.createElement("label");
+  label.className = "toggle toggle--inline";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(state.ui.overbetWarn);
+  input.addEventListener("change", (event) => {
+    actions.setOverbetWarn(event.currentTarget.checked);
+  });
+
+  const text = document.createElement("span");
+  text.textContent = "Warn me when I'm overbetting a weak hand";
+
+  label.append(input, text);
+  return label;
 }
 
 function createLiveGradingControl(state, actions) {

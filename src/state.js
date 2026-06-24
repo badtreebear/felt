@@ -74,6 +74,8 @@ export const state = {
     heroRaiseTo: 2.5,
     spotMode: "dealt",
     showMaths: false,
+    showThreats: false,
+    overbetWarn: false,
     actionDelayMs: 1000,
     settingsOpen: false,
     rosterOpen: false,

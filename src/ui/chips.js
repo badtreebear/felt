@@ -4,6 +4,7 @@ import { legalPostflopActions } from "../engine/postflop-action.js";
 import { recommendHeroSize } from "../engine/bet-sizing.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { villainRangeGridsForSpot } from "../engine/postflop-ev.js";
+import { boardThreats } from "../engine/board-threats.js";
 import { getOpeningRange } from "../data/ranges/opening-ranges.js";
 import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
 import { canonicalHandKey } from "../engine/player-model.js";
@@ -492,6 +493,13 @@ function betTipBody(state, actions) {
   }
   body.append(engineWrap);
 
+  // Phase 15 — overbet guard: if the intended size is too big for your relative
+  // strength, say so right under the recommendation.
+  const overbet = overbetWarningSection(state);
+  if (overbet) {
+    body.append(overbet);
+  }
+
   // Phase 12 — make the engine's thinking visible: the fold equity / balance
   // behind a bet, and the villain ranges behind the equity number.
   const bluffMath = bluffMathSection(state);
@@ -502,6 +510,14 @@ function betTipBody(state, actions) {
   const villains = villainRangesSection(state);
   if (villains) {
     body.append(villains);
+  }
+
+  // Phase 15 — relative hand strength: how the hand ranks against their range,
+  // and which made hands the board already lets them have that beat you. The
+  // antidote to tunnel-visioning your hand's absolute rank.
+  const beatsYou = whatBeatsYouSection(state);
+  if (beatsYou) {
+    body.append(beatsYou);
   }
 
   // Coach overview is a button (like the equity / pot-odds / EV popovers) rather
@@ -620,6 +636,163 @@ function villainRangesSection(state) {
   });
 
   return details;
+}
+
+// Relative hand strength for the current postflop spot: the hero's equity vs the
+// range the engine already puts the villains on (state.maths.heroEquity), plus
+// the board-threat list and which threats currently beat the hero. Pure read of
+// existing state — no new simulation. Exported for the in-game strip (slice 15.5).
+export function relativeStrength(state) {
+  const postflop = state?.hand?.postflop;
+
+  if (!postflop || postflop.status !== "waitingHero") {
+    return null;
+  }
+
+  const board = state?.hand?.board || [];
+
+  if (board.length < 3) {
+    return null;
+  }
+
+  const heroCards = state?.hand?.holeCards?.[state?.config?.heroSeat] || [];
+  const { threats, hero, wetness } = boardThreats(board, heroCards);
+  const rawEquity = state?.maths?.heroEquity;
+  const equityValue = Number(rawEquity);
+  const hasEquity = rawEquity !== null && rawEquity !== undefined && Number.isFinite(equityValue);
+
+  return {
+    equity: hasEquity ? equityValue : null,
+    threats,
+    beats: threats.filter((threat) => threat.beatsHero === true),
+    draws: threats.filter((threat) => threat.draw === true),
+    hero,
+    wetness,
+  };
+}
+
+// Overbet guard (slice 15.3). Catches you in the act: flags when your intended
+// bet/raise is meaningfully bigger than the spot wants AND your relative strength
+// is low (you're not ahead of their range) — the reactive pot-control nudge the
+// passive sizing tip never makes. A big bet with a strong hand is NOT flagged.
+const OVERBET_FACTOR = 1.25; // intended must exceed recommended by this much
+const OVERBET_LOW_EQUITY = 0.6; // "not crushing their range" — value bets sit above this
+
+function clampSize(value, lo, hi) {
+  const v = Number(value) || 0;
+  const low = Number(lo) || 0;
+  const high = Number(hi) || 0;
+  if (high <= 0) {
+    return Math.max(low, v);
+  }
+  return Math.max(low, Math.min(high, v));
+}
+
+export function overbetVerdict(state) {
+  const postflop = state?.hand?.postflop;
+
+  if (!postflop || postflop.status !== "waitingHero") {
+    return null;
+  }
+
+  const legal = legalPostflopActions(postflop);
+
+  if (!legal.canAct || (!legal.canBet && !legal.canRaise)) {
+    return null;
+  }
+
+  const rec = heroSizingRecommendation(state);
+
+  if (!rec || rec.status !== "ready") {
+    return null;
+  }
+
+  const facingBet = Boolean(legal.facingBet && legal.canRaise);
+  const intended = facingBet
+    ? clampSize(state?.ui?.heroRaiseTo || legal.minRaiseTo, legal.minRaiseTo, legal.maxRaiseTo)
+    : clampSize(
+      state?.ui?.heroRaiseTo || postflop.suggestedHeroBet || legal.minBet,
+      Math.min(legal.minBet, legal.maxBet),
+      legal.maxBet,
+    );
+
+  const recommended = Number(rec.amount) || 0;
+  const equity = Number(state?.maths?.heroEquity);
+
+  if (recommended <= 0 || !Number.isFinite(equity)) {
+    return null;
+  }
+
+  const tooBig = intended >= recommended * OVERBET_FACTOR;
+  const weak = equity < OVERBET_LOW_EQUITY;
+
+  if (!tooBig || !weak) {
+    return null;
+  }
+
+  const rel = relativeStrength(state);
+  const beats = rel?.beats?.map((threat) => threat.label.toLowerCase()) || [];
+  const beatsClause = beats.length ? ` — e.g. ${beats.join(", ")}` : "";
+  const verb = facingBet ? "raise to" : "bet";
+
+  return {
+    flag: true,
+    intended,
+    recommended,
+    equity,
+    reason: `You're about to ${verb} ${formatAmount(intended, state)}, but the spot wants around ${formatAmount(recommended, state)} (~${rec.fractionPct}% pot). With only ~${formatPercent(equity)} equity against their range, a bet this big is mostly called by hands that beat you${beatsClause}. Consider pot control.`,
+  };
+}
+
+function overbetWarningSection(state) {
+  const verdict = overbetVerdict(state);
+
+  if (!verdict) {
+    return null;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "bet-tip__section bet-tip__warning";
+  wrap.append(sectionLabel("Overbet check"));
+  wrap.append(paragraph(verdict.reason));
+  return wrap;
+}
+
+// "What beats you" — the relative-strength readout in the Bet tip, sitting next
+// to the villain-range grid (Phase 12). Quiet preflop / when there's no board.
+function whatBeatsYouSection(state) {
+  const rel = relativeStrength(state);
+
+  if (!rel) {
+    return null;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "bet-tip__section";
+  wrap.append(sectionLabel("What beats you"));
+
+  if (rel.equity !== null) {
+    const handName = rel.hero ? rel.hero.name.toLowerCase() : "your hand";
+    wrap.append(paragraph(
+      `You have ${handName}. Your equity against the range the engine puts them on is about ${formatPercent(rel.equity)} — that relative strength is what matters here, not your hand's rank.`,
+    ));
+  }
+
+  if (rel.beats.length) {
+    const list = rel.beats.map((threat) => threat.label.toLowerCase()).join(", ");
+    wrap.append(paragraph(`Made hands the board already allows that beat you: ${list}.`));
+  } else if (rel.hero) {
+    wrap.append(paragraph("No standard made hand the board allows beats you right now."));
+  }
+
+  if (rel.draws.length) {
+    const list = rel.draws.map((threat) => threat.label.toLowerCase()).join(", ");
+    const note = paragraph(`Draws that can get there: ${list}.`);
+    note.className = "bet-tip__numbers";
+    wrap.append(note);
+  }
+
+  return wrap;
 }
 
 function formatRatio(ratio) {

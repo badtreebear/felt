@@ -10,7 +10,7 @@ import { recommendedAction } from "../tracker/preflop-leaks.js";
 import { drillSummary, isDrillComplete } from "../drill/session.js";
 import { createCard, createCardRow } from "./cards.js";
 import { createCoachPanel } from "./coach-panel.js";
-import { createMathsChips, shouldShowMathsPanel } from "./chips.js";
+import { createMathsChips, shouldShowMathsPanel, relativeStrength, overbetVerdict } from "./chips.js";
 import { formatAmount } from "./formatting.js";
 import { createPopover } from "./popover.js";
 import { createRangeGrid, heroRangeVerdict } from "./range-grid.js";
@@ -101,7 +101,48 @@ function createBoard(state, showdown) {
   }
 
   board.append(pot, street, cards, result);
+
+  // Phase 15 — opt-in coaching aids (default off): "what beats you" strip and
+  // the overbet warning, so the player needn't open the Bet tip each time.
+  const aids = createCoachingAids(state);
+  if (aids) {
+    board.append(aids);
+  }
+
   return board;
+}
+
+function createCoachingAids(state) {
+  const wrap = document.createElement("div");
+  wrap.className = "board-aids";
+
+  if (state.ui.showThreats) {
+    const rel = relativeStrength(state);
+    if (rel) {
+      const strip = document.createElement("p");
+      strip.className = "board-aids__threats";
+      const equityText = rel.equity !== null
+        ? `Your equity ~${Math.round(rel.equity * 100)}% — `
+        : "";
+      const beats = rel.beats.map((threat) => threat.label.toLowerCase());
+      strip.textContent = beats.length
+        ? `${equityText}beats you: ${beats.join(", ")}.`
+        : `${equityText}nothing the board allows beats you yet.`;
+      wrap.append(strip);
+    }
+  }
+
+  if (state.ui.overbetWarn) {
+    const verdict = overbetVerdict(state);
+    if (verdict) {
+      const warn = document.createElement("p");
+      warn.className = "board-aids__overbet";
+      warn.textContent = `⚠ ${verdict.reason}`;
+      wrap.append(warn);
+    }
+  }
+
+  return wrap.childNodes.length ? wrap : null;
 }
 
 // Pre-calculated seat positions for crowded counts where the ellipse formula
