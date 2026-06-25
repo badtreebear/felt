@@ -1,4 +1,5 @@
 import { getSeatPositions } from "./positions.js";
+import { effectiveStackBb } from "./stack-depth.js";
 import {
   adjustedOpeningRange,
   canonicalHandKey,
@@ -124,11 +125,17 @@ function createInitialPreflopState({ hand, config, seatProfiles }) {
 
   const blinds = config.blinds;
 
+  // A2: effective stack in bb, measured from the starting stacks BEFORE blinds
+  // are posted (the relevant figure for choosing the opening range). Computed
+  // once here so the bet tip and the leak grader read the same engine truth.
+  const effectiveStackBbValue = effectiveStackBb({ stacks, bb: blinds.bb });
+
   postBlind({ contributions, stacks, seat: sbSeat, amount: blinds.sb });
   postBlind({ contributions, stacks, seat: bbSeat, amount: blinds.bb });
 
   return {
     status: "active",
+    effectiveStackBb: effectiveStackBbValue,
     result: null,
     winnerSeat: null,
     winnerSeats: [],

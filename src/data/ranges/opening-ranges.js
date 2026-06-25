@@ -1,4 +1,5 @@
 import { positionToRfiLabel, rangeBucketForPlayers } from "../../engine/positions.js";
+import { openDepth } from "../../engine/stack-depth.js";
 import {
   expandPositionRange,
   getChartPositionRange,
@@ -9,6 +10,8 @@ import rfi6MaxChart from "./default-rfi-6max.json";
 import rfiChart from "./default-rfi-9max.json";
 import rfiSbChart from "./default-rfi-sb.json";
 import rfi2maxChart from "./default-2max-pushfold.json";
+import rfi2maxJam15Chart from "./default-2max-pushfold-15bb.json";
+import rfi2maxDeepChart from "./default-2max-open-deep.json";
 
 const OPENING_CHARTS = {
   "6max": rfi6MaxChart,
@@ -25,18 +28,34 @@ const VALIDATED_OPENING_CHARTS = {
   "sb": loadOpeningChart(rfiSbChart, {
     positions: ["SB"],
   }),
-  "2max": loadOpeningChart(rfi2maxChart, {
-    positions: ["BTN"],
-  }),
+  // Heads-up charts, selected by effective stack depth (A2). All keyed on the
+  // single push-range position "BTN" (heads-up the SB is the button).
+  "2max": loadOpeningChart(rfi2maxChart, { positions: ["BTN"] }), // ~10bb Nash jam
+  "2max15": loadOpeningChart(rfi2maxJam15Chart, { positions: ["BTN"] }), // ~15bb Nash jam
+  "2maxDeep": loadOpeningChart(rfi2maxDeepChart, { positions: ["BTN"] }), // deep raise-first-in
 };
 
-export function getOpeningRange({ players, position }) {
-  // C1: 2-player (heads-up) uses a Nash push/fold open-jam chart.
-  // Heads-up the SB is the button; both seats ("BTN/SB", "SB", "BB") map to the
-  // single push-range key "BTN" so the open-jam chart always resolves.
+// Pick the heads-up chart by effective stack in bb. Deep/unknown play a
+// raise-first-in open; short stacks switch to a Nash open-jam (the ~10bb chart
+// under ~12.5bb, the ~15bb chart in the upper push/fold band).
+function headsUpChartKey(effBb) {
+  const depth = openDepth(effBb);
+  if (depth === "pushfold") {
+    return Number(effBb) <= 12.5 ? "2max" : "2max15";
+  }
+  // shallow (~15-25bb), deep (>25bb), or unknown -> raise-first-in open.
+  return "2maxDeep";
+}
+
+export function getOpeningRange({ players, position, effBb }) {
+  // C1/A2: heads-up uses a stack-aware chart — deep raise-first-in when deep,
+  // a Nash open-jam when short. Both seats ("BTN/SB", "SB", "BB") map to the
+  // single push-range key "BTN" so the chart always resolves.
   if (players === 2) {
     const headUpPos = "BTN";
-    const { chart: chart2max, error: error2max } = VALIDATED_OPENING_CHARTS["2max"];
+    const chartKey = headsUpChartKey(effBb);
+    const { chart: chart2max, error: error2max } =
+      VALIDATED_OPENING_CHARTS[chartKey] || VALIDATED_OPENING_CHARTS["2max"];
     if (!error2max && chart2max?.positions?.[headUpPos]) {
       const positionRange = getChartPositionRange(chart2max, headUpPos);
       return {

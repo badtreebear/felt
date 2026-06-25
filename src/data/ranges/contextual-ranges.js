@@ -1,4 +1,5 @@
 import { getSeatPositions, rangeBucketForPlayers } from "../../engine/positions.js";
+import { openDepth } from "../../engine/stack-depth.js";
 import {
   actionRangeComboCounts,
   actionRangeToGrid,
@@ -8,12 +9,23 @@ import {
 import { getOpeningRange } from "./opening-ranges.js";
 import vsThreeBetChartData from "./default-vs3bet-9max.json";
 import vsRfiChartData from "./default-vsrfi-9max.json";
+import huDefendDeepData from "./default-2max-bb-defend-deep.json";
+import huCallJam15Data from "./default-2max-bb-calljam-15bb.json";
+import huCallJam10Data from "./default-2max-bb-calljam-10bb.json";
 
 const { chart: vsRfiChart, error: vsRfiChartError } = loadVsRfiChart();
 const { chart: vsThreeBetChart, error: vsThreeBetChartError } = loadVsThreeBetChart();
 
-export function getRangeForSpot({ players, seat, position, hand }) {
-  const openingRange = getOpeningRange({ players, position });
+// A3: heads-up BB defend, selected by effective stack depth — deep plays
+// call/3-bet/fold, short plays call-or-fold vs the SB's open-jam.
+const HU_DEFEND_CHARTS = {
+  deep: loadActionRangeChart(huDefendDeepData),
+  jam15: loadActionRangeChart(huCallJam15Data),
+  jam10: loadActionRangeChart(huCallJam10Data),
+};
+
+export function getRangeForSpot({ players, seat, position, hand, effBb }) {
+  const openingRange = getOpeningRange({ players, position, effBb });
   const preflop = hand?.preflop;
 
   if (!preflop || preflop.voluntaryRaiserSeat === null || preflop.voluntaryRaiserSeat === undefined) {
@@ -47,6 +59,16 @@ export function getRangeForSpot({ players, seat, position, hand }) {
   }
 
   const contextTitle = `${position} vs ${openerPosition} open`;
+
+  // A3: heads-up BB defend vs the SB/BTN open. Single raise only (re-raised and
+  // multiway spots fall through to the shared handling below). Depth-aware:
+  // deep -> call/3-bet/fold; short -> call-or-fold vs the open-jam.
+  if (players === 2 && position === "BB" && preflop.raiseCount === 1) {
+    const huDefend = headsUpDefendRange({ position, openerPosition, effBb });
+    if (huDefend) {
+      return huDefend;
+    }
+  }
 
   // Facing a 3-bet/4-bet (the pot was re-raised before this seat acts). The
   // heads-up defend chart only covers a single raise, so explain that rather
@@ -126,6 +148,62 @@ function loadVsThreeBetChart() {
     console.error("Failed to load RFI vs 3-bet chart.", error);
     return { chart: null, error };
   }
+}
+
+function loadActionRangeChart(data) {
+  try {
+    return { chart: validateVsRfiChart(data), error: null };
+  } catch (error) {
+    console.error("Failed to load heads-up defend chart.", error);
+    return { chart: null, error };
+  }
+}
+
+// A3: pick the heads-up BB-defend chart by effective stack depth and return a
+// vsRfi-kind range so the popover and the leak grader handle it like any other
+// facing-open spot. Returns null if the chart can't be resolved (caller falls
+// back to the shared handling).
+function headsUpDefendRange({ position, openerPosition, effBb }) {
+  const depth = openDepth(effBb);
+  let key;
+  let title;
+  if (depth === "pushfold") {
+    key = Number(effBb) <= 12.5 ? "jam10" : "jam15";
+    const label = key === "jam10" ? "~10bb" : "~15bb";
+    title = `${position} vs ${openerPosition} jam - call/fold (${label})`;
+  } else {
+    key = "deep";
+    title = `${position} vs ${openerPosition} open - defend`;
+  }
+
+  const { chart, error } = HU_DEFEND_CHARTS[key] || {};
+  if (error || !chart) {
+    return null;
+  }
+
+  const spot = chart.spots.BB_vs_BTNSB;
+  if (!spot) {
+    return null;
+  }
+
+  return {
+    bucket: "2max",
+    source: chart.meta.source,
+    url: chart.meta.url,
+    meta: chart.meta,
+    tableSize: chart.meta.tableSize,
+    position: spot.responderPosition,
+    openerPosition,
+    displayPosition: position,
+    chartAvailable: true,
+    chartLoaded: true,
+    isPlaceholder: false,
+    kind: "vsRfi",
+    title,
+    grid: actionRangeToGrid(spot.actions),
+    combos: actionRangeComboCounts(spot.actions),
+    actions: spot.actions,
+  };
 }
 
 function findVsRfiSpot({ responderPosition, openerPosition }) {

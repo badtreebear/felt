@@ -79,6 +79,14 @@ describe("postflop action engine", () => {
     expect(showdown.stacks[0]).toBe(105);
     expect(showdown.stacks[1]).toBe(105);
     expect(totalStacks(showdown)).toBe(210);
+
+    // Each winner's "wins showdown" log entry reports the amount THEY won (their
+    // half), not the whole pot — the badge showed "Wins <full pot>" before.
+    const wins = showdown.actionLog.filter((entry) => String(entry.action).startsWith("wins showdown"));
+    expect(wins).toHaveLength(2);
+    expect(wins[0].size).toBe(wins[1].size);
+    expect(wins[0].size + wins[1].size).toBe(showdown.pot);
+    expect(wins[0].size).toBeLessThan(showdown.pot);
   });
 
   it("preserves total money when an odd half-chip pot is split three ways", () => {

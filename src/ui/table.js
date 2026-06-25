@@ -11,7 +11,7 @@ import { drillSummary, isDrillComplete } from "../drill/session.js";
 import { createCard, createCardRow } from "./cards.js";
 import { createCoachPanel } from "./coach-panel.js";
 import { createMathsChips, shouldShowMathsPanel, relativeStrength, overbetVerdict } from "./chips.js";
-import { formatAmount } from "./formatting.js";
+import { formatAmount, formatNumber } from "./formatting.js";
 import { createPopover } from "./popover.js";
 import { createRangeGrid, heroRangeVerdict } from "./range-grid.js";
 import { createHeroControl, createSeatAssignmentGrid, createSelectControl } from "./controls.js";
@@ -517,6 +517,7 @@ function createPositionBadge({ seat, position, state, actions }) {
       seat,
       position,
       hand: state.hand,
+      effBb: state.hand.preflop?.effectiveStackBb,
     });
     const heroCards = state.hand.holeCards[state.config.heroSeat] || [];
     const popover = createPopover({
@@ -695,31 +696,13 @@ function createHandPanel(state, showdown, actions) {
     return panel;
   }
 
-  const heading = document.createElement("h2");
-  heading.textContent = "Hand flow";
-
   const meta = document.createElement("dl");
   meta.className = "hand-meta";
-  meta.append(createMeta("Seed", state.hand.seed || "Pending"));
-  meta.append(createMeta("Board", state.hand.board.length ? state.hand.board.join(" ") : "No board yet"));
 
-  if (state.hand.preflop) {
-    meta.append(createMeta("Preflop", preflopStatusText(state)));
-  }
-
-  if (state.hand.postflop) {
-    meta.append(createMeta("Postflop", postflopStatusText(state)));
-  }
-
-  const heroRfi = heroRfiText(state);
-
-  if (heroRfi) {
-    meta.append(createMeta(heroRfi.label, heroRfi.text));
-  }
-
-  if (shouldShowMathsPanel(state) && Number(state.hand.toCall) > 0) {
-    meta.append(createMeta("To call", formatAmount(state.hand.toCall, state)));
-  }
+  // Seed / Board / Preflop / Postflop / To-call / RFI hint used to live here but
+  // duplicated the table itself or the Bet tip (the board cards, the pot's "Call"
+  // line, the board result text, and the Bet tip's actual verdict). Removed to
+  // declutter; Seed moves to the foot of the panel. The top now leads with chips.
 
   // Clickable Equity / Pot odds / EV chips when the Maths layer is on, plus the
   // constant Bet tip button whenever the hero is to act. Popover renders here in
@@ -750,7 +733,7 @@ function createHandPanel(state, showdown, actions) {
 
   const drillPanel = createDrillPanel(state, actions);
   const bustBanner = createBustBanner(state, actions);
-  const lead = drillPanel ? [heading, drillPanel] : [heading];
+  const lead = drillPanel ? [drillPanel] : [];
   if (bustBanner) {
     panel.append(...lead, bustBanner, meta);
   } else {
@@ -774,16 +757,98 @@ function createHandPanel(state, showdown, actions) {
     panel.append(coachPanel);
   }
 
-  panel.append(log);
+  // Hand flow now lives down here, where the action log actually is, with an h3
+  // heading matching "Hero action" / "AI coach".
+  const flow = document.createElement("section");
+  flow.className = "hand-flow";
+  const flowHeading = document.createElement("h3");
+  flowHeading.textContent = "Hand flow";
+  flow.append(flowHeading, log);
+  panel.append(flow);
+
+  // Seed lives at the very foot now — rarely needed (replay/determinism), so it
+  // shouldn't take prime space at the top.
+  const seedFoot = document.createElement("p");
+  seedFoot.className = "hand-seed-foot";
+  seedFoot.textContent = `Seed: ${state.hand.seed || "pending"}`;
+  panel.append(seedFoot);
+
   return panel;
 }
 
 function createHeroActionControls(state, actions) {
   if (state.hand.postflop?.status === "waitingHero") {
-    return createPostflopHeroActionControls(state, actions);
+    return createPostflopHeroActionControls(state, actions) || createIdleHeroActionControls();
   }
 
-  return createPreflopHeroActionControls(state, actions);
+  if (state.hand.preflop?.status === "waitingHero") {
+    return createPreflopHeroActionControls(state, actions) || createIdleHeroActionControls();
+  }
+
+  // Not the hero's turn (villains acting, or hand resolved) — keep the section in
+  // place with a disabled skeleton so the panel doesn't jump around.
+  return createIdleHeroActionControls();
+}
+
+function idleActionButton(label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "hero-action-button";
+  button.disabled = true;
+  button.textContent = label;
+  return button;
+}
+
+function createIdleHeroActionControls() {
+  const wrapper = document.createElement("section");
+  wrapper.className = "hero-actions hero-actions--idle";
+  wrapper.setAttribute("aria-label", "Hero action");
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Hero action";
+
+  const buttonRow = document.createElement("div");
+  buttonRow.className = "hero-actions__row";
+  buttonRow.append(idleActionButton("Fold"), idleActionButton("Call"));
+
+  const raiseRow = document.createElement("div");
+  raiseRow.className = "hero-actions__raise";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.disabled = true;
+  input.placeholder = "—";
+  input.setAttribute("aria-label", "Raise amount");
+
+  raiseRow.append(input, idleActionButton("Raise to —"));
+
+  wrapper.append(heading, buttonRow, raiseRow);
+  return wrapper;
+}
+
+// Sizing shortcuts — always the same three (½ pot, ¾ pot, Pot), in every spot,
+// so they don't change or disappear. Each sets the amount to that fraction of the
+// pot, clamped to the legal range for the action.
+function createPotPresetRow({ actions, pot, min, max }) {
+  const potValue = Math.max(0, Number(pot) || 0);
+  const row = document.createElement("div");
+  row.className = "hero-actions__presets";
+
+  [
+    { label: "½ pot", frac: 0.5 },
+    { label: "¾ pot", frac: 0.75 },
+    { label: "Pot", frac: 1 },
+  ].forEach(({ label, frac }) => {
+    const target = clampAmount(potValue * frac, min, max);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hero-actions__preset";
+    button.textContent = label;
+    button.addEventListener("click", () => actions.setHeroRaiseTo(target));
+    row.append(button);
+  });
+
+  return row;
 }
 
 function createSizePresetRow(presets) {
@@ -811,11 +876,6 @@ function createPreflopHeroActionControls(state, actions) {
     return null;
   }
 
-  const raiseTo = clampAmount(
-    state.ui.heroRaiseTo || legal.minRaiseTo,
-    legal.minRaiseTo,
-    legal.maxRaiseTo,
-  );
   const wrapper = document.createElement("section");
   wrapper.className = "hero-actions";
   wrapper.setAttribute("aria-label", "Hero preflop action");
@@ -835,26 +895,16 @@ function createPreflopHeroActionControls(state, actions) {
 
   buttonRow.append(foldButton, callButton);
 
-  const raiseRow = document.createElement("div");
-  raiseRow.className = "hero-actions__raise";
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.inputMode = "decimal";
-  input.min = String(legal.minRaiseTo);
-  input.max = String(legal.maxRaiseTo);
-  input.value = String(raiseTo);
-  input.setAttribute("aria-label", "Raise amount");
-  input.addEventListener("change", (event) => {
-    actions.setHeroRaiseTo(Number(event.currentTarget.value));
+  const raiseRow = createWagerRow({
+    state,
+    actions,
+    min: legal.minRaiseTo,
+    max: legal.maxRaiseTo,
+    initial: state.ui.heroRaiseTo || legal.minRaiseTo,
+    label: "Raise to",
+    confirmLabel: "Raise",
+    onCommit: (amount) => actions.heroPreflopAction("raise", amount),
   });
-
-  const raiseButton = createHeroActionButton(
-    `Raise to ${formatAmount(raiseTo, state)}`,
-    () => actions.heroPreflopAction("raise", raiseTo),
-  );
-
-  raiseRow.append(input, raiseButton);
 
   // All-in raise (only when the hero has chips beyond a call).
   if (!callIsAllIn && legal.maxRaiseTo > legal.callAmount) {
@@ -864,16 +914,12 @@ function createPreflopHeroActionControls(state, actions) {
     ));
   }
 
-  const presetRow = createSizePresetRow(
-    uniqueNumbers([2.5, 3, state.hand.pot]).map((amount) => {
-      const target = clampAmount(amount, legal.minRaiseTo, legal.maxRaiseTo);
-      return {
-        label: amount === state.hand.pot ? "Pot" : formatAmount(amount, state),
-        amount: target,
-        onClick: () => actions.setHeroRaiseTo(target),
-      };
-    }),
-  );
+  const presetRow = createPotPresetRow({
+    actions,
+    pot: state.hand.pot,
+    min: legal.minRaiseTo,
+    max: legal.maxRaiseTo,
+  });
 
   wrapper.append(heading, buttonRow, raiseRow, presetRow);
   return wrapper;
@@ -887,11 +933,6 @@ function createPostflopHeroActionControls(state, actions) {
   }
 
   const effectiveMinBet = Math.min(legal.minBet, legal.maxBet);
-  const betAmount = clampAmount(
-    state.ui.heroRaiseTo || state.hand.postflop.suggestedHeroBet || legal.minBet,
-    effectiveMinBet,
-    legal.maxBet,
-  );
   const wrapper = document.createElement("section");
   wrapper.className = "hero-actions";
   wrapper.setAttribute("aria-label", "Hero postflop action");
@@ -915,42 +956,30 @@ function createPostflopHeroActionControls(state, actions) {
 
     // Raising is allowed when the hero has chips beyond a call.
     if (legal.canRaise) {
-      const raiseTo = clampAmount(
-        state.ui.heroRaiseTo || legal.minRaiseTo,
-        legal.minRaiseTo,
-        legal.maxRaiseTo,
-      );
-      const raiseRow = document.createElement("div");
-      raiseRow.className = "hero-actions__raise";
-
-      const input = document.createElement("input");
-      input.type = "text";
-      input.inputMode = "decimal";
-      input.min = String(legal.minRaiseTo);
-      input.max = String(legal.maxRaiseTo);
-      input.value = String(raiseTo);
-      input.setAttribute("aria-label", "Raise to amount");
-      input.addEventListener("change", (event) => {
-        actions.setHeroRaiseTo(Number(event.currentTarget.value));
+      const raiseRow = createWagerRow({
+        state,
+        actions,
+        min: legal.minRaiseTo,
+        max: legal.maxRaiseTo,
+        initial: state.ui.heroRaiseTo || legal.minRaiseTo,
+        label: "Raise to",
+        confirmLabel: "Raise",
+        onCommit: (amount) => actions.heroPostflopAction("raise", amount),
       });
 
-      raiseRow.append(
-        input,
-        createHeroActionButton(`Raise to ${formatAmount(raiseTo, state)}`, () => actions.heroPostflopAction("raise", raiseTo)),
-      );
-
-      if (legal.maxRaiseTo > raiseTo) {
+      if (legal.maxRaiseTo > legal.minRaiseTo) {
         raiseRow.append(createHeroActionButton(
           `All in ${formatAmount(legal.maxRaiseTo, state)}`,
           () => actions.heroPostflopAction("raise", legal.maxRaiseTo),
         ));
       }
 
-      const potRaise = state.hand.pot;
-      const raisePresets = createSizePresetRow([
-        { label: "½ pot", amount: clampAmount(potRaise * 0.5, legal.minRaiseTo, legal.maxRaiseTo), onClick: () => actions.setHeroRaiseTo(clampAmount(potRaise * 0.5, legal.minRaiseTo, legal.maxRaiseTo)) },
-        { label: "Pot", amount: clampAmount(potRaise, legal.minRaiseTo, legal.maxRaiseTo), onClick: () => actions.setHeroRaiseTo(clampAmount(potRaise, legal.minRaiseTo, legal.maxRaiseTo)) },
-      ]);
+      const raisePresets = createPotPresetRow({
+        actions,
+        pot: state.hand.pot,
+        min: legal.minRaiseTo,
+        max: legal.maxRaiseTo,
+      });
 
       wrapper.append(raiseRow, raisePresets);
     }
@@ -960,39 +989,31 @@ function createPostflopHeroActionControls(state, actions) {
 
   buttonRow.append(createHeroActionButton("Check", () => actions.heroPostflopAction("check")));
 
-  const betRow = document.createElement("div");
-  betRow.className = "hero-actions__raise";
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.inputMode = "decimal";
-  input.min = String(effectiveMinBet);
-  input.max = String(legal.maxBet);
-  input.value = String(betAmount);
-  input.setAttribute("aria-label", "Bet amount");
-  input.addEventListener("change", (event) => {
-    actions.setHeroRaiseTo(Number(event.currentTarget.value));
+  const betRow = createWagerRow({
+    state,
+    actions,
+    min: effectiveMinBet,
+    max: legal.maxBet,
+    initial: state.ui.heroRaiseTo || state.hand.postflop.suggestedHeroBet || effectiveMinBet,
+    label: "Bet",
+    confirmLabel: "Bet",
+    onCommit: (amount) => actions.heroPostflopAction("bet", amount),
   });
 
-  betRow.append(
-    input,
-    createHeroActionButton(`Bet ${formatAmount(betAmount, state)}`, () => actions.heroPostflopAction("bet", betAmount)),
-  );
-
   // All-in bet shoves the hero's full remaining stack.
-  if (legal.maxBet > 0 && legal.maxBet > betAmount) {
+  if (legal.maxBet > 0 && legal.maxBet > effectiveMinBet) {
     betRow.append(createHeroActionButton(
       `All in ${formatAmount(legal.maxBet, state)}`,
       () => actions.heroPostflopAction("bet", legal.maxBet),
     ));
   }
 
-  const pot = state.hand.pot;
-  const presetRow = createSizePresetRow([
-    { label: "½ pot", amount: clampAmount(pot * 0.5, effectiveMinBet, legal.maxBet), onClick: () => actions.setHeroRaiseTo(clampAmount(pot * 0.5, effectiveMinBet, legal.maxBet)) },
-    { label: "¾ pot", amount: clampAmount(pot * 0.75, effectiveMinBet, legal.maxBet), onClick: () => actions.setHeroRaiseTo(clampAmount(pot * 0.75, effectiveMinBet, legal.maxBet)) },
-    { label: "Pot", amount: clampAmount(pot, effectiveMinBet, legal.maxBet), onClick: () => actions.setHeroRaiseTo(clampAmount(pot, effectiveMinBet, legal.maxBet)) },
-  ]);
+  const presetRow = createPotPresetRow({
+    actions,
+    pot: state.hand.pot,
+    min: effectiveMinBet,
+    max: legal.maxBet,
+  });
 
   wrapper.append(heading, buttonRow, betRow, presetRow);
   return wrapper;
@@ -1034,6 +1055,49 @@ function createHeroActionButton(label, onClick) {
   button.textContent = label;
   button.addEventListener("click", onClick);
   return button;
+}
+
+// Shared bet/raise sizing row. The amount lives ONLY in the box (with a clear
+// "Raise to" affordance), and the confirm button carries no number — so the two
+// can never show different values. The button commits whatever's in the box,
+// clamped to the legal range; the box snaps to the clamped value on blur.
+function createWagerRow({ state, actions, min, max, initial, label, confirmLabel, onCommit }) {
+  const row = document.createElement("div");
+  row.className = "hero-actions__raise";
+
+  // The engine works in big blinds, but the table (Call / All-in buttons, pot)
+  // shows the player's display unit — $ by default. Show and accept the box in
+  // that SAME unit so the numbers agree, converting back to bb on commit. This
+  // is what made a 3bb min-raise read "3" next to a "$3" call.
+  const isBb = state.ui?.displayUnit === "bb";
+  const rate = isBb ? 1 : (Number(state.config?.bbDollarValue) || 2);
+  const toDisplay = (bb) => formatNumber(bb * rate);
+  const fromDisplay = (text) => clampAmount(Number(text) / rate, min, max);
+
+  const valueBb = clampAmount(initial ?? (state.ui.heroRaiseTo || min), min, max);
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.inputMode = "decimal";
+  input.value = toDisplay(valueBb);
+  input.setAttribute("aria-label", `${confirmLabel} to amount`);
+  input.addEventListener("change", () => {
+    const bb = fromDisplay(input.value);
+    input.value = toDisplay(bb);
+    actions.setHeroRaiseTo(bb);
+  });
+
+  const field = document.createElement("div");
+  field.className = "hero-actions__field";
+  const span = document.createElement("span");
+  span.className = "hero-actions__field-label";
+  span.textContent = `${label} ${isBb ? "(bb)" : "($)"}`;
+  field.append(span, input);
+
+  const confirm = createHeroActionButton(confirmLabel, () => onCommit(fromDisplay(input.value)));
+
+  row.append(field, confirm);
+  return row;
 }
 
 function completionCueForState(state) {
@@ -1175,6 +1239,7 @@ function heroRfiText(state) {
     seat: heroSeat,
     position: heroPosition,
     hand: state.hand,
+    effBb: state.hand.preflop?.effectiveStackBb,
   });
 
   // Folded to the BB (a check/walk) — no decision to train, stay quiet.

@@ -1,0 +1,85 @@
+{
+  "meta": {
+    "source": "HoldemResources HeadsUp Nash Equilibrium (no ante) for the short jam-call ranges; approximate solver-consensus for the deep defend",
+    "url": "https://www.holdemresources.net/hune",
+    "chart": "Heads-Up BB call vs SB jam (~15bb)",
+    "tableSize": 2,
+    "effectiveStack": "15bb",
+    "transcribedBy": "claude (approximate, labelled non-exact; home-game trainer). Jason to review before live.",
+    "date": "2026-06-25",
+    "note": "BB facing an SB/BTN open-jam at ~15bb. Call-or-fold per the HRC no-ante Nash 'Caller' table (call if max-call threshold >= 15bb).",
+    "legend": {
+      "threeBetValue": "3-bet for value",
+      "threeBetBluff": "3-bet as a bluff",
+      "call": "call (deep) / call the jam (short)",
+      "fold": "absent = fold"
+    }
+  },
+  "spots": {
+    "BB_vs_BTNSB": {
+      "responderPosition": "BB",
+      "openerPositions": [
+        "BTN/SB"
+      ],
+      "sourceNote": "HRC Caller >=15bb",
+      "comboCounts": {
+        "call": 382
+      },
+      "actions": {
+        "22": "call",
+        "33": "call",
+        "44": "call",
+        "55": "call",
+        "66": "call",
+        "77": "call",
+        "88": "call",
+        "99": "call",
+        "AA": "call",
+        "KK": "call",
+        "QQ": "call",
+        "JJ": "call",
+        "TT": "call",
+        "AKs": "call",
+        "AQs": "call",
+        "AJs": "call",
+        "ATs": "call",
+        "A9s": "call",
+        "A8s": "call",
+        "A7s": "call",
+        "A6s": "call",
+        "A5s": "call",
+        "A4s": "call",
+        "A3s": "call",
+        "A2s": "call",
+        "KQs": "call",
+        "KJs": "call",
+        "KTs": "call",
+        "K9s": "call",
+        "K8s": "call",
+        "K7s": "call",
+        "QJs": "call",
+        "QTs": "call",
+        "Q9s": "call",
+        "JTs": "call",
+        "AKo": "call",
+        "AQo": "call",
+        "AJo": "call",
+        "ATo": "call",
+        "A9o": "call",
+        "A8o": "call",
+        "A7o": "call",
+        "A6o": "call",
+        "A5o": "call",
+        "A4o": "call",
+        "A3o": "call",
+        "A2o": "call",
+        "KQo": "call",
+        "KJo": "call",
+        "KTo": "call",
+        "K9o": "call",
+        "QJo": "call",
+        "QTo": "call"
+      }
+    }
+  }
+}

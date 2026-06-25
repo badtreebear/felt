@@ -17,6 +17,7 @@ export function scorePreflopDecision({ preflop, action }) {
       buttonSeat: preflop.buttonSeat,
       preflop,
     },
+    effBb: preflop.effectiveStackBb,
   });
   const heroAction = normalizeHeroAction({ preflop, action });
   const recommended = recommendedAction({ range, handKey });

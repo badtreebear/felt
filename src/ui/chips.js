@@ -24,9 +24,11 @@ const MATHS_POPOVER_CLOSE_DELAY_MS = 120;
 let mathsPopoverCloseTimer = null;
 
 export function createMathsChips(state, actions, { renderPopover = true } = {}) {
-  // Render when the Maths layer is on (deterministic chips) OR whenever the hero
-  // is to act (so the constant Bet tip button is always available).
-  if (!shouldShowMathsPanel(state) && !heroIsToAct(state)) {
+  // The Bet tip / What-beats-you / Villains slots are always present (reserved)
+  // so the row doesn't appear and disappear between hands — they're disabled when
+  // it isn't the hero's turn. The deterministic maths chips still gate on the
+  // Maths toggle.
+  if (!state?.hand) {
     return null;
   }
 
@@ -42,49 +44,130 @@ export function createMathsChips(state, actions, { renderPopover = true } = {}) 
     }
   });
 
-  // Pot odds and EV only make sense when there is a bet to call; equity is
-  // always meaningful, so show it alone when the hero is not facing a bet. The
-  // deterministic chips only render when the Maths layer is on.
+  // When the Maths layer is on we render all three chips every time and reserve
+  // their space — Pot odds and EV only mean something facing a bet, so off a bet
+  // they show as muted, disabled placeholders rather than disappearing (which is
+  // what made the row jump).
   if (shouldShowMathsPanel(state)) {
     const facingBet = Number(state?.hand?.toCall) > 0;
-    const chips = facingBet ? CHIP_CONFIG : CHIP_CONFIG.filter((chip) => chip.id === "equity");
 
-    chips.forEach((chip) => {
+    CHIP_CONFIG.forEach((chip) => {
+      const active = chip.id === "equity" || facingBet;
       const button = document.createElement("button");
       button.type = "button";
       button.className = `maths-chip maths-chip--${chip.id}`;
-      button.classList.toggle("maths-chip--negative", chip.id === "ev" && Number(state.maths.evCall) < 0);
-      button.classList.toggle("maths-chip--positive", chip.id === "ev" && Number(state.maths.evCall) >= 0);
+      button.classList.toggle("maths-chip--placeholder", !active);
+      button.disabled = !active;
+      button.classList.toggle("maths-chip--negative", active && chip.id === "ev" && Number(state.maths.evCall) < 0);
+      button.classList.toggle("maths-chip--positive", active && chip.id === "ev" && Number(state.maths.evCall) >= 0);
       button.setAttribute("aria-expanded", String(state.ui.openPopover === chip.id));
-      button.textContent = `${chip.label.toUpperCase()} ${chipValue(chip.id, state)}`;
-      button.addEventListener("click", () => actions.setOpenPopover(chip.id));
+      button.textContent = active ? `${chip.label.toUpperCase()} ${chipValue(chip.id, state)}` : `${chip.label.toUpperCase()} —`;
+      if (active) {
+        button.addEventListener("click", () => actions.setOpenPopover(chip.id));
+      }
       tray.append(button);
     });
   }
 
-  // Bet tip — a constant button present in every hero-to-act spot (preflop and
-  // postflop, regardless of the Maths toggle). Clicking it shows the engine's
-  // recommendation and fires a coach AI overview for the spot.
-  if (heroIsToAct(state)) {
-    const tipButton = document.createElement("button");
-    tipButton.type = "button";
-    tipButton.className = "maths-chip maths-chip--tip";
-    tipButton.setAttribute("aria-expanded", String(state.ui.openPopover === "betTip"));
-    tipButton.textContent = "BET TIP";
+  // Bet tip — its slot is always reserved so the row doesn't jump between hands;
+  // enabled only when the hero is to act.
+  const canAct = heroIsToAct(state);
+  const tipButton = document.createElement("button");
+  tipButton.type = "button";
+  tipButton.className = "maths-chip maths-chip--tip";
+  tipButton.classList.toggle("maths-chip--placeholder", !canAct);
+  tipButton.disabled = !canAct;
+  tipButton.setAttribute("aria-expanded", String(state.ui.openPopover === "betTip"));
+  tipButton.textContent = "BET TIP";
+  if (canAct) {
     tipButton.addEventListener("click", () => actions.setOpenPopover("betTip"));
-    tray.append(tipButton);
   }
+  tray.append(tipButton);
+
+  // Relative-strength reference surfaces (Phase 15). Their slots are always
+  // reserved so the row doesn't jump as the hand develops or between hands —
+  // disabled (muted) until they're live: postflop, on the hero's turn.
+  appendPopoverChip(tray, {
+    id: "beatsYou",
+    label: "WHAT BEATS YOU",
+    state,
+    actions,
+    enabled: canAct && Boolean(relativeStrength(state)),
+  });
+  appendPopoverChip(tray, {
+    id: "villains",
+    label: "VILLAINS RANGE",
+    state,
+    actions,
+    enabled: canAct && villainRangeGridsForSpot(state?.hand?.postflop).length > 0,
+  });
 
   if (renderPopover && state.ui.openPopover) {
-    tray.append(createPopover({
+    const popover = createPopover({
       id: "maths-popover",
       title: popoverTitle(state.ui.openPopover),
       onClose: () => actions.setOpenPopover(null),
       children: popoverBody(state.ui.openPopover, state, actions),
-    }));
+    });
+    tray.append(popover);
+    // Keep it on screen: the chips can sit high in a scrolling panel, so a tall
+    // popover (bet tip / villain grids) would otherwise run off the top. Place it
+    // as a viewport-fixed box on whichever side has more room, clamped to fit.
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => positionPopover(popover, tray));
+    }
   }
 
   return tray;
+}
+
+function positionPopover(popover, anchor) {
+  if (!popover || !anchor || typeof popover.getBoundingClientRect !== "function") {
+    return;
+  }
+  if (popover.isConnected === false) {
+    return;
+  }
+
+  const a = anchor.getBoundingClientRect();
+  const vw = window.innerWidth || 0;
+  const vh = window.innerHeight || 0;
+  const margin = 8;
+
+  // No layout (e.g. jsdom in tests) — leave the CSS defaults alone.
+  if (!vw || !vh) {
+    return;
+  }
+
+  popover.style.position = "fixed";
+  const width = popover.getBoundingClientRect().width || 320;
+  popover.style.left = `${Math.max(margin, Math.min(a.left, vw - width - margin))}px`;
+  popover.style.right = "auto";
+
+  const spaceAbove = a.top - margin * 2;
+  const spaceBelow = vh - a.bottom - margin * 2;
+  const openDown = spaceBelow >= spaceAbove;
+  const avail = Math.max(140, openDown ? spaceBelow : spaceAbove);
+
+  if (openDown) {
+    popover.style.top = `${a.bottom + margin}px`;
+    popover.style.bottom = "auto";
+  } else {
+    popover.style.top = "auto";
+    popover.style.bottom = `${vh - a.top + margin}px`;
+  }
+  popover.style.maxHeight = `${avail}px`;
+
+  // Cap the BODY directly and force it to scroll, rather than relying on flex
+  // sizing — that's what was letting tall content overflow so the page scrolled
+  // behind the fixed box instead of the box scrolling.
+  const header = popover.querySelector(".popover__header");
+  const body = popover.querySelector(".popover__body");
+  if (body) {
+    const headerH = header ? header.offsetHeight : 0;
+    body.style.maxHeight = `${Math.max(80, avail - headerH)}px`;
+    body.style.overflowY = "auto";
+  }
 }
 
 function cancelMathsPopoverClose() {
@@ -148,12 +231,28 @@ function popoverTitle(id) {
     return "Bet tip";
   }
 
+  if (id === "beatsYou") {
+    return "What beats you";
+  }
+
+  if (id === "villains") {
+    return "Villain range";
+  }
+
   return "EV";
 }
 
 function popoverBody(id, state, actions) {
   if (id === "betTip") {
     return betTipBody(state, actions);
+  }
+
+  if (id === "beatsYou") {
+    return whatBeatsYouSection(state) || emptyPopoverNote("No board yet — nothing to read.");
+  }
+
+  if (id === "villains") {
+    return villainRangesBody(state) || emptyPopoverNote("No villains to read in this spot.");
   }
 
   const body = deterministicBody(id, state);
@@ -430,7 +529,11 @@ function preflopOpenVerdict(state) {
     return null; // the BB never opens
   }
 
-  const range = getOpeningRange({ players: state.config.players, position: heroPosition });
+  const range = getOpeningRange({
+    players: state.config.players,
+    position: heroPosition,
+    effBb: state.hand.preflop?.effectiveStackBb,
+  });
 
   if (!range.chartAvailable || range.isPlaceholder) {
     return null;
@@ -465,6 +568,7 @@ function preflopChartRecommendation(state) {
     seat: heroSeat,
     position,
     hand: state.hand,
+    effBb: state.hand.preflop?.effectiveStackBb,
   });
 
   return {
@@ -505,19 +609,6 @@ function betTipBody(state, actions) {
   const bluffMath = bluffMathSection(state);
   if (bluffMath) {
     body.append(bluffMath);
-  }
-
-  const villains = villainRangesSection(state);
-  if (villains) {
-    body.append(villains);
-  }
-
-  // Phase 15 — relative hand strength: how the hand ranks against their range,
-  // and which made hands the board already lets them have that beat you. The
-  // antidote to tunnel-visioning your hand's absolute rank.
-  const beatsYou = whatBeatsYouSection(state);
-  if (beatsYou) {
-    body.append(beatsYou);
   }
 
   // Coach overview is a button (like the equity / pot-odds / EV popovers) rather
@@ -598,10 +689,10 @@ function bluffMathSection(state) {
   return wrap;
 }
 
-// Collapsible view of each live villain's assumed range — the position+profile
-// ranges the engine samples to produce your equity. Reuses the range-grid
-// renderer so it reads like the hero RFI chart.
-function villainRangesSection(state) {
+// Each live villain's assumed range — the position+profile ranges the engine
+// samples to produce your equity. Its own popover now (split out of the Bet tip),
+// so it renders the grids directly rather than as a collapsible section.
+function villainRangesBody(state) {
   const postflop = state?.hand?.postflop;
 
   if (!postflop || postflop.status !== "waitingHero") {
@@ -614,28 +705,42 @@ function villainRangesSection(state) {
     return null;
   }
 
-  const details = document.createElement("details");
-  details.className = "bet-tip__villains";
-
-  const summary = document.createElement("summary");
-  summary.textContent = villains.length === 1
-    ? "What the villain likely has"
-    : "What the villains likely have";
-  details.append(summary);
+  const wrap = document.createElement("div");
+  wrap.className = "bet-tip__section";
 
   const intro = paragraph("The engine's assumed range behind your equity — by position and player type.");
   intro.className = "bet-tip__numbers";
-  details.append(intro);
+  wrap.append(intro);
 
   villains.forEach((villain) => {
     const where = villain.position || `Seat ${villain.seat + 1}`;
-    details.append(createMiniRangeGrid({
+    wrap.append(createMiniRangeGrid({
       grid: villain.grid,
       label: `${where} · ${villain.profile}`,
     }));
   });
 
-  return details;
+  return wrap;
+}
+
+function emptyPopoverNote(text) {
+  const body = document.createElement("div");
+  body.append(paragraph(text));
+  return body;
+}
+
+function appendPopoverChip(tray, { id, label, state, actions, enabled = true }) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `maths-chip maths-chip--${id}`;
+  button.classList.toggle("maths-chip--placeholder", !enabled);
+  button.disabled = !enabled;
+  button.setAttribute("aria-expanded", String(state.ui.openPopover === id));
+  button.textContent = label;
+  if (enabled) {
+    button.addEventListener("click", () => actions.setOpenPopover(id));
+  }
+  tray.append(button);
 }
 
 // Relative hand strength for the current postflop spot: the hero's equity vs the

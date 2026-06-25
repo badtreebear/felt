@@ -1617,6 +1617,15 @@ input:focus-visible {
   cursor: pointer;
 }
 
+/* Reserved-but-inactive chip: holds its slot so the row doesn't reflow, but
+   reads as unavailable (e.g. Pot odds with no bet to face, or What-beats-you
+   preflop). */
+.maths-chip--placeholder {
+  opacity: 0.32;
+  cursor: default;
+  border-style: dashed;
+}
+
 .maths-chip--positive {
   border-color: rgba(142, 211, 134, 0.7);
   color: #d6ffd1;
@@ -1688,6 +1697,15 @@ input:focus-visible {
   border-top: 1px solid rgba(247, 244, 237, 0.14);
   margin-top: 10px;
   padding-top: 10px;
+}
+
+/* Seed parked at the foot of the hand panel — present for replay, out of the way. */
+.hand-seed-foot {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
 }
 
 .session-scoreboard {
@@ -1779,6 +1797,9 @@ input:focus-visible {
   max-height: min(70vh, 560px);
   border: 1px solid rgba(201, 162, 39, 0.72);
   border-radius: 8px;
+  /* Clip the scrolling body to the rounded frame so tall content (range grids,
+     coach text) can't break the border at the bottom. */
+  overflow: hidden;
   color: #f7f4ed;
   background: #071714;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.46);
@@ -1818,10 +1839,14 @@ input:focus-visible {
   gap: 8px;
   padding: 12px;
   background: #071714;
-  /* min-height:0 lets this flex child shrink below its content so it can scroll
-     instead of pushing the popover off-screen. */
+  /* flex:1 + min-height:0 make this the bounded scroll area (instead of sizing to
+     its content, which let tall content overflow and scroll the page behind the
+     fixed popover). overscroll-behavior:contain stops the wheel leaking to the
+     page once you hit the top/bottom of the box. */
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .popover__body p {
@@ -2101,8 +2126,29 @@ input:focus-visible {
   padding: 14px 0;
 }
 
+/* Placeholder shown when it isn't the hero's turn — holds the section's space so
+   the panel doesn't jump, but reads as inactive. */
+.hero-actions--idle {
+  opacity: 0.4;
+}
+
+.hero-actions--idle .hero-action-button {
+  cursor: default;
+}
+
 .hero-actions h3 {
   margin: 0;
+  color: var(--brass);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.hand-flow {
+  margin-top: 12px;
+}
+
+.hand-flow h3 {
+  margin: 0 0 8px;
   color: var(--brass);
   font-size: 0.82rem;
   text-transform: uppercase;
@@ -2135,6 +2181,26 @@ input:focus-visible {
   padding: 0 10px;
   color: #f7f4ed;
   background: #102c27;
+}
+
+/* Labelled amount cell: "Raise to" affordance + the box, as one grid column so
+   the two-column raise row layout is preserved. */
+.hero-actions__field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hero-actions__field-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hero-actions__field input {
+  flex: 1;
 }
 
 .hero-action-button,

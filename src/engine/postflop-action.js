@@ -383,12 +383,17 @@ function completeShowdown(postflop) {
   postflop.winnerSeat = winnerSeats.length === 1 ? winnerSeats[0] : null;
   postflop.showdownDescription = description;
   postflop.currentSeat = null;
-  postflop.actionLog.push(logEntry({
-    seat: overallWinners[0],
-    street: "showdown",
-    action: `wins showdown with ${description}`,
-    size: pots.reduce((sum, pot) => sum + pot.amount, 0),
-  }));
+  // Log each chip winner with the amount THEY actually won (their share), not the
+  // whole-pot total — otherwise a split shows every winner "winning" the full pot.
+  const logSeats = winnerSeats.length ? winnerSeats : [overallWinners[0]];
+  logSeats.forEach((seat) => {
+    postflop.actionLog.push(logEntry({
+      seat,
+      street: "showdown",
+      action: `wins showdown with ${solvedBySeat[seat]?.descr || description}`,
+      size: roundAmount(shares[seat] || 0),
+    }));
+  });
 }
 
 function awardOnlyActivePlayer(postflop) {
