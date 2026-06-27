@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "note": "Tournament blind structures for Felt. Stacks are in chips; blinds rise per level and the engine advances by HANDS played (not a clock), so durations from a live structure are translated to a hands-per-level count. No antes, no top-up; rebuy amount is recorded for reference only (rebuy logic is out of scope).",
+    "date": "2026-06-25",
+    "defaultStructureId": "pub"
+  },
+  "structures": [
+    {
+      "id": "pub",
+      "name": "Pub game (sped up)",
+      "startingStack": 15000,
+      "rebuy": 15000,
+      "source": "Jason's live pub structure, break + top-up removed, intervals translated to hands and sped up.",
+      "levels": [
+        { "level": 1,  "sb": 100,   "bb": 200,   "hands": 12 },
+        { "level": 2,  "sb": 200,   "bb": 400,   "hands": 12 },
+        { "level": 3,  "sb": 300,   "bb": 600,   "hands": 10 },
+        { "level": 4,  "sb": 400,   "bb": 800,   "hands": 10 },
+        { "level": 5,  "sb": 500,   "bb": 1000,  "hands": 10 },
+        { "level": 6,  "sb": 1000,  "bb": 2000,  "hands": 10 },
+        { "level": 7,  "sb": 2000,  "bb": 4000,  "hands": 8 },
+        { "level": 8,  "sb": 3000,  "bb": 6000,  "hands": 8 },
+        { "level": 9,  "sb": 5000,  "bb": 10000, "hands": 8 },
+        { "level": 10, "sb": 10000, "bb": 20000, "hands": 8 },
+        { "level": 11, "sb": 20000, "bb": 40000, "hands": 6 },
+        { "level": 12, "sb": 30000, "bb": 60000, "hands": 6 }
+      ]
+    }
+  ]
+}

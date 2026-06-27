@@ -1,3 +1,5 @@
+import { getBlindSeats } from "./positions.js";
+
 export const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
 export const SUITS = ["s", "h", "d", "c"];
 
@@ -57,7 +59,7 @@ export function shuffleDeck(deck = createDeck(), seedOrRng = createSeed()) {
   return shuffled;
 }
 
-export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2), blinds, seed } = {}) {
+export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2), blinds, seed, liveSeats } = {}) {
   if (!Number.isInteger(players) || players < 2 || players > 9) {
     throw new Error("Texas Hold'em requires 2 to 9 players.");
   }
@@ -83,9 +85,14 @@ export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2)
   burnCards.push(deck.shift());
   const river = deck.splice(0, 1);
   const boardRunout = [...flop, ...turn, ...river];
-  const buttonSeat = Math.floor(rng() * players);
-  const sbSeat = players === 2 ? buttonSeat : (buttonSeat + 1) % players;
-  const bbSeat = players === 2 ? (buttonSeat + 1) % players : (buttonSeat + 2) % players;
+  // B5: deal the button + blinds only among live (non-busted) seats, so
+  // eliminated players don't get the button or post blinds. With everyone live
+  // this matches the old behaviour exactly (same rng draw).
+  const live = Array.isArray(liveSeats) && liveSeats.length >= 2
+    ? [...liveSeats].sort((a, b) => a - b)
+    : Array.from({ length: players }, (_, seat) => seat);
+  const buttonSeat = live[Math.floor(rng() * live.length)];
+  const { sbSeat, bbSeat } = getBlindSeats({ players, buttonSeat, liveSeats: live });
   const postedBlinds = blinds || { sb: 0.5, bb: 1 };
 
   return {
@@ -105,6 +112,8 @@ export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2)
       { seat: heroSeat, street: "preflop", action: "hero dealt in", size: 0 },
     ],
     buttonSeat,
+    sbSeat,
+    bbSeat,
   };
 }
 

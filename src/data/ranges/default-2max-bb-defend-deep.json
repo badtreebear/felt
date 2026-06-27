@@ -5,13 +5,13 @@
     "chart": "Heads-Up BB defend vs BTN/SB open (deep)",
     "tableSize": 2,
     "effectiveStack": "deep (~25bb+)",
-    "transcribedBy": "claude (approximate, labelled non-exact; home-game trainer). Jason to review before live.",
+    "transcribedBy": "claude (approximate, labelled non-exact; home-game trainer). Widened 25 Jun 2026 per Jason's review to ~80% defend. Jason to review.",
     "date": "2026-06-25",
-    "note": "BB facing a single SB/BTN raise-first-in open at deep stacks. Call / 3-bet (value+bluff) / fold. Approximate solver-consensus split (~69% defend), labelled non-exact.",
+    "note": "BB facing a single SB/BTN raise-first-in open at deep stacks. Call / 3-bet (value+bluff) / fold. HU BB closes the action and gets a great price vs a min-raise, so it defends very wide (~80%). Approximate, labelled non-exact.",
     "legend": {
       "threeBetValue": "3-bet for value",
       "threeBetBluff": "3-bet as a bluff",
-      "call": "call (deep) / call the jam (short)",
+      "call": "call",
       "fold": "absent = fold"
     }
   },
@@ -21,9 +21,9 @@
       "openerPositions": [
         "BTN/SB"
       ],
-      "sourceNote": "approximate deep HU BB defend",
+      "sourceNote": "approximate deep HU BB defend (~80%)",
       "comboCounts": {
-        "call": 824,
+        "call": 968,
         "threeBetValue": 58,
         "threeBetBluff": 36
       },
@@ -149,20 +149,32 @@
         "Q7o": "call",
         "Q6o": "call",
         "Q5o": "call",
+        "Q4o": "call",
+        "Q3o": "call",
+        "Q2o": "call",
         "JTo": "call",
         "J9o": "call",
         "J8o": "call",
         "J7o": "call",
+        "J6o": "call",
+        "J5o": "call",
+        "J4o": "call",
+        "J3o": "call",
+        "J2o": "call",
         "T9o": "call",
         "T8o": "call",
         "T7o": "call",
+        "T6o": "call",
+        "T5o": "call",
+        "T4o": "call",
+        "T3o": "call",
+        "T2o": "call",
         "98o": "call",
         "97o": "call",
+        "96o": "call",
         "87o": "call",
         "86o": "call",
-        "76o": "call",
-        "65o": "call",
-        "54o": "call"
+        "85o": "call"
       }
     }
   }

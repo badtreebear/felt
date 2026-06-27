@@ -15,6 +15,9 @@ export function buildCoachSnapshot(state) {
       heroSeat,
       heroPos: positions[heroSeat],
       blinds: [state.config.blinds.sb, state.config.blinds.bb],
+      // A5: effective stack in big blinds (from the preflop snapshot), so the
+      // coach can recognise short-stack / push-fold spots and explain shove/fold.
+      effectiveStackBb: state.hand.preflop?.effectiveStackBb ?? null,
     },
     street: state.hand.street,
     hero: state.hand.holeCards[heroSeat] || [],

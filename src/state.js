@@ -43,6 +43,17 @@ export const state = {
     matched: 0,
     evDeltaBb: 0,
   },
+  // B1: tournament blind schedule. Off by default so cash play is unchanged
+  // (the UI toggle comes in B3). When enabled, new hands read blinds + starting
+  // stack from the selected structure and advance the level by hands played.
+  tournament: {
+    enabled: false,
+    structureId: "pub",
+    levelIndex: 0,
+    handsAtLevel: 0,
+    // Optional chip buy-in override; null = use the structure's startingStack.
+    buyIn: null,
+  },
   drill: {
     active: false,
     mode: "history",

@@ -519,7 +519,7 @@ export function engineTipText(state) {
 }
 
 function preflopOpenVerdict(state) {
-  const positions = getSeatPositions({
+  const positions = state.hand.preflop?.positions || getSeatPositions({
     players: state.config.players,
     buttonSeat: state.hand.buttonSeat,
   });
@@ -556,7 +556,7 @@ function preflopOpenVerdict(state) {
 // grades on, so the bet tip and the leak grader never disagree. Returns an
 // action of "raise" | "threeBet" | "fourBet" | "call" | "fold" | "unknown".
 function preflopChartRecommendation(state) {
-  const positions = getSeatPositions({
+  const positions = state.hand.preflop?.positions || getSeatPositions({
     players: state.config.players,
     buttonSeat: state.hand.buttonSeat,
   });

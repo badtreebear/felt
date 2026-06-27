@@ -47,7 +47,9 @@ describe("preflop action engine", () => {
     const legal = legalHeroActions(waiting);
     expect(legal.canAct).toBe(true);
     expect(legal.callAmount).toBe(1);
-    expect(legal.minRaiseTo).toBe(2.5);
+    // Min legal raise is currentBet + minRaise = 1bb + 1bb = 2bb (a min-raise).
+    // The 2.5bb position-based size is only the suggested default, not the floor.
+    expect(legal.minRaiseTo).toBe(2);
     expect(totalStacks(waiting) + waiting.pot).toBe(tableConfig().players * tableConfig().stack);
   });
 

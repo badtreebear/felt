@@ -2201,6 +2201,10 @@ input:focus-visible {
 
 .hero-actions__field input {
   flex: 1;
+  /* Don't let the label squeeze the box to nothing — keep room for ~5 digits so
+     amounts like 1,000 / 15,000 aren't clipped. */
+  min-width: 4.5rem;
+  text-align: center;
 }
 
 .hero-action-button,
@@ -2282,7 +2286,9 @@ input:focus-visible {
   gap: 10px;
   border: 1px solid rgba(142, 211, 134, 0.46);
   border-radius: 8px;
-  margin: 0 0 18px;
+  /* Extra top margin so it sits clearly below the live-grading box rather than
+     crowding its border. */
+  margin: 16px 0 18px;
   padding: 14px;
   background: rgba(14, 58, 47, 0.72);
 }
@@ -2300,10 +2306,13 @@ input:focus-visible {
 }
 
 .completion-cue__button {
-  min-height: 38px;
+  /* Shrink to its label instead of stretching full width, so it reads as a cue,
+     not a wall of green over the grading box. */
+  justify-self: start;
+  min-height: 36px;
   border: 1px solid rgba(142, 211, 134, 0.7);
   border-radius: 6px;
-  padding: 0 12px;
+  padding: 0 16px;
   color: #10241e;
   background: #8ed386;
   font-weight: 800;
@@ -2568,6 +2577,39 @@ input:focus-visible {
   .seat .card-row {
     gap: 4px;
   }
+}
+
+/* B2/B3 — tournament mode */
+.tournament-banner {
+  margin: 8px 0 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 162, 39, 0.5);
+  background: rgba(201, 162, 39, 0.12);
+  color: var(--brass);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+.tournament-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tournament-status {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--brass);
+}
+
+.tournament-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

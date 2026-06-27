@@ -4,6 +4,7 @@ import { resolveShowdown } from "../engine/hand-eval.js";
 import { legalHeroActions } from "../engine/preflop-action.js";
 import { legalPostflopActions } from "../engine/postflop-action.js";
 import { getSeatPositions } from "../engine/positions.js";
+import { getBlindStructure } from "../engine/tournament.js";
 import { hasWeightedProfiles } from "../roster/weights.js";
 import { getRangeForSpot } from "../data/ranges/contextual-ranges.js";
 import { recommendedAction } from "../tracker/preflop-leaks.js";
@@ -96,6 +97,10 @@ function createBoard(state, showdown) {
     result.textContent = preflopResultText(state);
   } else if (state.hand.preflop?.status === "waitingHero") {
     result.textContent = "Hero to act preflop.";
+  } else if (!state.hand.preflop && state.hand.street !== "preflop") {
+    // Practice-from-Flop/Turn/River sets up the board with no betting phase —
+    // it's a study spot, not villains mid-action. Label it accurately.
+    result.textContent = `Practice spot — study the ${state.hand.street}.`;
   } else {
     result.textContent = "Villains are resolving preflop action.";
   }
@@ -207,7 +212,9 @@ function createSeats(state, actions) {
 
   const players = state.config.players;
   const heroSeat = state.config.heroSeat;
-  const positions = getSeatPositions({ players, buttonSeat: state.hand.buttonSeat });
+  // B5: prefer the engine's positions (live-aware — busted seats are skipped).
+  const positions = state.hand.preflop?.positions
+    || getSeatPositions({ players, buttonSeat: state.hand.buttonSeat });
   const phase = currentPhaseState(state);
   const handTerminal = isTerminalHand(state);
   const winnerSeats = winnerSeatsForBadges(state);
@@ -252,7 +259,19 @@ function createSeats(state, actions) {
     seatElement.classList.toggle("seat--out", isOut);
 
     const stack = document.createElement("span");
-    stack.textContent = formatAmount(phase?.stacks?.[seat] ?? state.config.stack, state);
+    // Fall back to the dealt table stacks (which hold the tournament buy-in or
+    // configured stack) before the generic config.stack, so seats show the real
+    // starting stack when there's no live phase yet (e.g. Practice-from-Flop).
+    const stackChips = phase?.stacks?.[seat] ?? state.config.tableStacks?.[seat] ?? state.config.stack;
+    // B2: in tournament mode also show the stack in big blinds, since blinding
+    // out is the whole point — that's the number that drives push/fold.
+    if (state.tournament?.enabled) {
+      const bb = Number(state.config.blinds?.bb) || 1;
+      const stackBb = Math.round((stackChips / bb) * 10) / 10;
+      stack.textContent = `${formatAmount(stackChips, state)} · ${stackBb}bb`;
+    } else {
+      stack.textContent = formatAmount(stackChips, state);
+    }
 
     if (!isHero) {
       const wildName = !seatPlayer ? (state.config.seatNames?.[seat] || null) : null;
@@ -1069,8 +1088,14 @@ function createWagerRow({ state, actions, min, max, initial, label, confirmLabel
   // shows the player's display unit — $ by default. Show and accept the box in
   // that SAME unit so the numbers agree, converting back to bb on commit. This
   // is what made a 3bb min-raise read "3" next to a "$3" call.
-  const isBb = state.ui?.displayUnit === "bb";
-  const rate = isBb ? 1 : (Number(state.config?.bbDollarValue) || 2);
+  // Tournament mode works in chips (no $/bb conversion); cash shows the player's
+  // display unit ($ by default), so the box agrees with the Call / All-in labels.
+  const isTournament = Boolean(state.tournament?.enabled);
+  const isBb = !isTournament && state.ui?.displayUnit === "bb";
+  const rate = isTournament || isBb ? 1 : (Number(state.config?.bbDollarValue) || 2);
+  // Chips is implied by the table (stacks read "1,000 · 5bb"), so don't repeat it
+  // here — it just crowds the box and clips the number. Keep the unit for $/bb.
+  const unitLabel = isTournament ? "" : (isBb ? "(bb)" : "($)");
   const toDisplay = (bb) => formatNumber(bb * rate);
   const fromDisplay = (text) => clampAmount(Number(text) / rate, min, max);
 
@@ -1091,7 +1116,7 @@ function createWagerRow({ state, actions, min, max, initial, label, confirmLabel
   field.className = "hero-actions__field";
   const span = document.createElement("span");
   span.className = "hero-actions__field-label";
-  span.textContent = `${label} ${isBb ? "(bb)" : "($)"}`;
+  span.textContent = unitLabel ? `${label} ${unitLabel}` : label;
   field.append(span, input);
 
   const confirm = createHeroActionButton(confirmLabel, () => onCommit(fromDisplay(input.value)));
@@ -1226,7 +1251,7 @@ function heroRfiText(state) {
     return null;
   }
 
-  const positions = getSeatPositions({
+  const positions = state.hand.preflop?.positions || getSeatPositions({
     players: state.config.players,
     buttonSeat: state.hand.buttonSeat,
   });
@@ -1392,8 +1417,13 @@ function createBustBanner(state, actions) {
 
   const row = document.createElement("div");
   row.className = "bust-banner__actions";
+  const rebuyAmount = state.tournament?.enabled
+    ? (Number(state.tournament.buyIn) > 0
+      ? Number(state.tournament.buyIn)
+      : getBlindStructure(state.tournament.structureId).startingStack)
+    : state.config.stack;
   row.append(
-    createHeroActionButton(`Rebuy ${formatAmount(state.config.stack, state)}`, () => actions.rebuyHero()),
+    createHeroActionButton(`Rebuy ${formatAmount(rebuyAmount, state)}`, () => actions.rebuyHero()),
     createHeroActionButton("New game", () => actions.newGame()),
   );
 

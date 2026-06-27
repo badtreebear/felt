@@ -100,12 +100,14 @@ export function legalPostflopActions(postflop) {
   return {
     canAct: true,
     callAmount,
-    minBet: POSTFLOP_MODEL_CONSTANTS.minBetBb,
+    minBet: Math.min(stack, postflop.bigBlind || POSTFLOP_MODEL_CONSTANTS.minBetBb),
     maxBet: stack,
     canBet: callAmount <= 0 && stack > 0,
     facingBet,
     canRaise: facingBet && maxRaiseTo > postflop.currentBet,
-    minRaiseTo: facingBet ? Math.min(maxRaiseTo, roundAmount(postflop.currentBet * 2)) : 0,
+    minRaiseTo: facingBet
+      ? Math.min(maxRaiseTo, roundAmount(postflop.currentBet + (postflop.lastRaiseSize || postflop.currentBet)))
+      : 0,
     maxRaiseTo,
   };
 }
@@ -151,8 +153,14 @@ function createInitialPostflopState({ hand, config, previous, seatProfiles, stre
     holeCards: hand.holeCards,
     board,
     street,
+    // Big blind in chips — the minimum legal bet/raise increment. Scales with the
+    // tournament level (e.g. 200), not a fixed 1, so you can't bet 1 chip.
+    bigBlind: Number(config.blinds?.bb) || POSTFLOP_MODEL_CONSTANTS.minBetBb,
     pot: previous.pot,
     currentBet: 0,
+    // Size of the last bet/raise increment on this street; a re-raise must be at
+    // least this much more on top of currentBet. Reset to 0 each new street.
+    lastRaiseSize: 0,
     bettorSeat: null,
     currentSeat: null,
     contributions,
@@ -281,15 +289,23 @@ function applyFold(postflop, seat) {
 }
 
 function applyBet(postflop, seat, requestedAmount) {
-  const amount = Math.min(cleanBetAmount(requestedAmount), postflop.stacks[seat] || 0);
+  const stack = postflop.stacks[seat] || 0;
+  const requested = Math.min(cleanBetAmount(requestedAmount), stack);
 
-  if (amount <= 0) {
+  if (requested <= 0) {
     applyCheck(postflop, seat);
     return;
   }
 
+  // Enforce the minimum bet of one big blind (capped at the stack, so a short
+  // stack can still shove for less). A sub-min request is bumped up to the min.
+  const minBet = Math.min(stack, postflop.bigBlind || POSTFLOP_MODEL_CONSTANTS.minBetBb);
+  const amount = Math.max(requested, minBet);
+
   putStreetAmount(postflop, seat, amount);
   postflop.currentBet = postflop.streetContributions[seat];
+  // Opening bet sets the increment: a min-raise must be at least this much more.
+  postflop.lastRaiseSize = postflop.currentBet;
   postflop.bettorSeat = seat;
   postflop.toAct = seatsAfter(postflop, seat).filter((candidate) => (
     candidate !== seat && !postflop.folded[candidate] && !postflop.allIn[candidate]
@@ -301,7 +317,10 @@ function applyRaise(postflop, seat, requestedTo) {
   const stack = postflop.stacks[seat] || 0;
   const current = postflop.streetContributions[seat] || 0;
   const maxTo = roundAmount(current + stack);
-  const minTo = Math.min(maxTo, roundAmount(postflop.currentBet * 2));
+  // Min raise = currentBet + the last bet/raise increment (not currentBet * 2,
+  // which only happens to be right for the first raise over a bet).
+  const increment = postflop.lastRaiseSize || postflop.currentBet;
+  const minTo = Math.min(maxTo, roundAmount(postflop.currentBet + increment));
   const target = Math.min(maxTo, Math.max(minTo, roundAmount(requestedTo) || minTo));
 
   if (target <= postflop.currentBet) {
@@ -310,6 +329,7 @@ function applyRaise(postflop, seat, requestedTo) {
     return;
   }
 
+  postflop.lastRaiseSize = roundAmount(target - postflop.currentBet);
   putStreetAmount(postflop, seat, target);
   postflop.currentBet = postflop.streetContributions[seat];
   postflop.bettorSeat = seat;

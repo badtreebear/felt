@@ -26,15 +26,15 @@ import {
   advancePreflopAction,
   applyHeroPreflopAction,
   startPreflopAction,
-  suggestedHeroRaiseTo,
 } from "./engine/preflop-action.js";
 import {
   advancePostflopAction,
   applyHeroPostflopAction,
+  legalPostflopActions,
   startPostflopStreet,
-  suggestedHeroBet,
 } from "./engine/postflop-action.js";
 import { requiredEquity } from "./engine/potodds.js";
+import { advanceAfterHand, blindsForLevel, getBlindStructure, startTournament } from "./engine/tournament.js";
 import { state, subscribe, updateState } from "./state.js";
 import {
   createHero,
@@ -122,8 +122,21 @@ const actions = {
     clearAutoActionTimer();
     const players = state.config.players;
     const heroSeat = Math.floor(players / 2);
+
+    // B1: in tournament mode, blinds and (on reset) the starting stack come from
+    // the selected structure. resetStacks starts a fresh tournament at level 1.
+    const tournamentOn = state.tournament.enabled;
+    const structure = tournamentOn ? getBlindStructure(state.tournament.structureId) : null;
+    const progress = tournamentOn && resetStacks
+      ? startTournament(state.tournament.structureId)
+      : state.tournament;
+    const blinds = tournamentOn ? blindsForLevel(structure, progress.levelIndex) : state.config.blinds;
+
+    const tournamentBuyIn = tournamentOn
+      ? (Number(state.tournament.buyIn) > 0 ? Number(state.tournament.buyIn) : structure.startingStack)
+      : null;
     const startingStacks = resetStacks
-      ? defaultStacksForPlayers(players, state.config.stack)
+      ? defaultStacksForPlayers(players, tournamentOn ? tournamentBuyIn : state.config.stack)
       : startingStacksForNextHand({ seed, players, heroSeat });
 
     if (stackOverrides) {
@@ -135,16 +148,38 @@ const actions = {
     const manualSpot = state.ui.spotMode === "manual"
       ? { pot: state.hand.pot || 24, toCall: state.hand.toCall || 8 }
       : null;
+    // B5: seats with chips are live; the dealer deals the button + blinds only
+    // among them so busted players don't get dealt the blinds.
+    const liveSeats = Object.entries(startingStacks)
+      .filter(([, amount]) => Number(amount) > 0)
+      .map(([seat]) => Number(seat));
     const hand = dealHoldemHand({
       players,
       heroSeat,
-      blinds: state.config.blinds,
+      blinds,
       seed,
+      liveSeats,
     });
 
     updateState((draft) => {
       draft.config.heroSeat = heroSeat;
       draft.config.tableStacks = startingStacks;
+
+      // B1: apply this hand's tournament blinds, then advance the level counter
+      // for the next fresh hand (replays keep the level they were played at).
+      if (tournamentOn) {
+        draft.config.blinds = blinds;
+        // Merge progress into the existing tournament state rather than replacing
+        // it — startTournament()/advanceAfterHand() only carry structure/level
+        // fields, so a plain assignment would drop `enabled` and `buyIn`. Losing
+        // `enabled` flips the table into cash display mode, where formatAmount
+        // multiplies every amount by bbDollarValue (default 2) — that's the
+        // "stacks doubled to 2x the buy-in" report (chips were always correct).
+        draft.tournament = {
+          ...draft.tournament,
+          ...(seed ? progress : advanceAfterHand(progress, structure)),
+        };
+      }
       ensureSeatProfiles(draft.config);
       const resolvedSeats = resolveSeatProfilesForHand({
         config: draft.config,
@@ -230,9 +265,16 @@ const actions = {
     }
   },
   rebuyHero() {
-    // Top the hero back up to the starting stack (others keep their stacks).
+    // Top the hero back up to the starting stack (others keep their stacks). In a
+    // tournament that's the buy-in (the structure's startingStack if no override),
+    // not the cash config stack.
     const heroSeat = Math.floor(state.config.players / 2);
-    actions.dealNewHand(undefined, { stackOverrides: { [heroSeat]: state.config.stack } });
+    const tournamentOn = state.tournament?.enabled;
+    const structure = tournamentOn ? getBlindStructure(state.tournament.structureId) : null;
+    const rebuyTo = tournamentOn
+      ? (Number(state.tournament.buyIn) > 0 ? Number(state.tournament.buyIn) : structure.startingStack)
+      : state.config.stack;
+    actions.dealNewHand(undefined, { stackOverrides: { [heroSeat]: rebuyTo } });
   },
   async heroAdd({ name } = {}) {
     const hero = createHero({ name });
@@ -875,6 +917,10 @@ const actions = {
         seatProfiles: draft.config.seatProfiles,
         autoActionLimit,
       }));
+      // Clear the prior street's grade so a leftover (e.g. the preflop call grade)
+      // doesn't linger and look like it's grading the new street. A check produces
+      // no grade, so the panel stays clean until the next gradable decision.
+      draft.hand.lastFeedback = null;
       draft.ui.openPopover = null;
       draft.ui.openRangeSeat = null;
       refreshMaths(draft, { keepEquity: false });
@@ -1270,6 +1316,38 @@ const actions = {
       // Toggling live grading starts (or clears) a fresh session tally.
       resetSession(draft);
       draft.hand.lastFeedback = null;
+    });
+  },
+  // B3: switch tournament mode on/off. Enabling resets to level 1 and applies
+  // the structure's level-1 blinds (start a New game to apply the starting
+  // stack); disabling reverts to the cash blinds.
+  setTournamentEnabled(enabled) {
+    updateState((draft) => {
+      draft.tournament.enabled = Boolean(enabled);
+      if (enabled) {
+        const progress = startTournament(draft.tournament.structureId);
+        Object.assign(draft.tournament, progress);
+        draft.config.blinds = blindsForLevel(getBlindStructure(progress.structureId), progress.levelIndex);
+      } else {
+        draft.config.blinds = { sb: 0.5, bb: 1 };
+      }
+    });
+  },
+  setTournamentStructure(structureId) {
+    updateState((draft) => {
+      const progress = startTournament(structureId);
+      Object.assign(draft.tournament, progress);
+      if (draft.tournament.enabled) {
+        draft.config.blinds = blindsForLevel(getBlindStructure(progress.structureId), progress.levelIndex);
+      }
+    });
+  },
+  // B3: optional chip buy-in override. Empty/<=0 falls back to the structure's
+  // startingStack. Applies on the next New game (deal-in with the new stack).
+  setTournamentBuyIn(chips) {
+    updateState((draft) => {
+      const value = Number(chips);
+      draft.tournament.buyIn = Number.isFinite(value) && value > 0 ? value : null;
     });
   },
   startDrill(leakType, mode = "history") {
@@ -2042,7 +2120,10 @@ function applyPreflopToDraft(draft, preflop) {
   }
 
   if (preflop.status === "waitingHero") {
-    draft.ui.heroRaiseTo = suggestedHeroRaiseTo(preflop);
+    // Default the raise box to the minimum legal raise (currentBet + minRaise);
+    // the hero can type a larger amount to override. (Was the position-based
+    // 2.5bb suggestion, which sat above the true min and confused the box.)
+    draft.ui.heroRaiseTo = preflop.currentBet + preflop.minRaise;
   }
 }
 
@@ -2059,7 +2140,12 @@ function applyPostflopToDraft(draft, postflop) {
   }
 
   if (postflop.status === "waitingHero") {
-    draft.ui.heroRaiseTo = suggestedHeroBet(postflop);
+    // Match preflop: default the box to the minimum legal bet/raise, overridable.
+    // The suggested size lives in the Bet tip / pot presets, not the prefilled box.
+    const legal = legalPostflopActions(postflop);
+    draft.ui.heroRaiseTo = legal.facingBet
+      ? legal.minRaiseTo
+      : Math.min(legal.minBet, legal.maxBet);
   }
 }
 

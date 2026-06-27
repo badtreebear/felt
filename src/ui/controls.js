@@ -4,6 +4,7 @@ import { coachAskButton, coachOfflineNote } from "./coach-explain-control.js";
 import { TRACKER_SUMMARY_TOPIC, trackerExampleTopic } from "../coach/tracker.js";
 import { getProfileOptions } from "../engine/player-model.js";
 import { getSeatPositions } from "../engine/positions.js";
+import { getBlindStructure, listBlindStructures } from "../engine/tournament.js";
 import { baseProfilePercent } from "../roster/weights.js";
 import { leakStreet } from "../drill/selection.js";
 import { createCoachSettingsPanel } from "./coach-settings.js";
@@ -83,6 +84,15 @@ export function renderControls(container, state, actions) {
   controls.append(dealButton, nextButton, replayButton, newGameButton, trackerButton, mathsButton, glossaryButton, settings);
 
   container.append(controls);
+
+  // B2: visible tournament level/blinds banner while tournament mode is on.
+  if (state.tournament?.enabled) {
+    const tourBanner = document.createElement("div");
+    tourBanner.className = "tournament-banner";
+    tourBanner.textContent = tournamentStatusText(state);
+    container.append(tourBanner);
+  }
+
   bindSettingsDismissal(settings, state, actions);
 
   if (state.ui.glossaryOpen) {
@@ -228,6 +238,7 @@ function createSettingsPanel(state, actions, { scriptedMode }) {
 
   panel.append(
     createSettingsSection("Gameplay", gameplayControls),
+    createSettingsSection("Tournament", [createTournamentControl(state, actions)]),
     createSettingsSection("Display", [createPhaseFourSettings(state, actions)]),
     createSettingsSection("Coaching aids", [
       createShowThreatsControl(state, actions),
@@ -381,6 +392,76 @@ function createSettingsSection(title, controls) {
 
   section.append(heading, body);
   return section;
+}
+
+// B3: tournament mode toggle + structure picker. B2: a level/blinds status line
+// when enabled. Off by default so cash play is unchanged.
+function createTournamentControl(state, actions) {
+  const wrap = document.createElement("div");
+  wrap.className = "tournament-control";
+
+  const label = document.createElement("label");
+  label.className = "toggle toggle--inline";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(state.tournament?.enabled);
+  input.addEventListener("change", (event) => {
+    actions.setTournamentEnabled(event.currentTarget.checked);
+  });
+  const text = document.createElement("span");
+  text.textContent = "Tournament mode (blinds rise as you play)";
+  label.append(input, text);
+  wrap.append(label);
+
+  const structures = listBlindStructures();
+  wrap.append(createSelectControl({
+    id: "tournament-structure",
+    label: "Blind structure",
+    value: state.tournament?.structureId || structures[0]?.id,
+    options: structures.map((structure) => ({ value: structure.id, label: structure.name })),
+    onChange: (value) => actions.setTournamentStructure(value),
+    disabled: !state.tournament?.enabled,
+  }));
+
+  // Chip buy-in override — blank uses the structure's starting stack.
+  const structure = getBlindStructure(state.tournament?.structureId);
+  const buyInField = document.createElement("label");
+  buyInField.className = "field";
+  const buyInText = document.createElement("span");
+  buyInText.textContent = "Buy-in (chips)";
+  const buyInInput = document.createElement("input");
+  buyInInput.type = "number";
+  buyInInput.min = "0";
+  buyInInput.step = "any";
+  buyInInput.placeholder = String(structure.startingStack);
+  buyInInput.value = state.tournament?.buyIn ?? "";
+  buyInInput.disabled = !state.tournament?.enabled;
+  buyInInput.addEventListener("change", (event) => {
+    actions.setTournamentBuyIn(event.currentTarget.value);
+  });
+  buyInField.append(buyInText, buyInInput);
+  wrap.append(buyInField);
+
+  if (state.tournament?.enabled) {
+    const status = document.createElement("p");
+    status.className = "tournament-status";
+    status.textContent = tournamentStatusText(state);
+    const hint = document.createElement("p");
+    hint.className = "tournament-hint";
+    hint.textContent = "Start a New game to deal in with the tournament stack.";
+    wrap.append(status, hint);
+  }
+
+  return wrap;
+}
+
+// Compact "Level N/M · sb/bb · X hands left" summary for the current tournament.
+export function tournamentStatusText(state) {
+  const structure = getBlindStructure(state.tournament?.structureId);
+  const levelIndex = Math.max(0, Math.min(structure.levels.length - 1, state.tournament?.levelIndex || 0));
+  const level = structure.levels[levelIndex];
+  const handsLeft = Math.max(0, level.hands - (state.tournament?.handsAtLevel || 0));
+  return `Level ${levelIndex + 1}/${structure.levels.length} · blinds ${level.sb}/${level.bb} · ${handsLeft} hand${handsLeft === 1 ? "" : "s"} left at this level`;
 }
 
 function createRevealVillainsControl(state, actions) {

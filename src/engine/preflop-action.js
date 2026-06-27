@@ -1,5 +1,6 @@
-import { getSeatPositions } from "./positions.js";
+import { getBlindSeats, getSeatPositions } from "./positions.js";
 import { effectiveStackBb } from "./stack-depth.js";
+import { headsUpPushFoldAction } from "./pushfold-ranges.js";
 import {
   adjustedOpeningRange,
   canonicalHandKey,
@@ -60,7 +61,7 @@ export function suggestedHeroRaiseTo(preflop) {
   }
 
   if (preflop.voluntaryRaiserSeat === null) {
-    return openingSizeForPosition(preflop.positions[preflop.heroSeat], "standard");
+    return openingSizeForPosition(preflop.positions[preflop.heroSeat], "standard") * (preflop.bigBlind || 1);
   }
 
   if (preflop.raiseCount === 1) {
@@ -89,9 +90,14 @@ export function legalHeroActions(preflop) {
   }
 
   const callAmount = amountToCall(preflop, preflop.heroSeat);
-  const minRaiseTo = preflop.voluntaryRaiserSeat === null
-    ? openingSizeForPosition(preflop.positions[preflop.heroSeat], "standard")
-    : preflop.currentBet + preflop.minRaise;
+  // The minimum legal raise is ALWAYS "match the current bet, then raise by at
+  // least the last bet/raise" = currentBet + minRaise. This holds whether the
+  // hero is opening (currentBet = bb, minRaise = bb -> a 2bb min-open) or facing
+  // a raise (e.g. 500 + 300 -> 800). The position-based opening size is only a
+  // *suggested default*, not a floor — it lives in suggestedHeroRaiseTo — so
+  // using it here let the box sit below the legal minimum (the "raise to 100"
+  // bug while facing a 500 raise).
+  const minRaiseTo = preflop.currentBet + preflop.minRaise;
 
   return {
     canAct: true,
@@ -106,9 +112,6 @@ function createInitialPreflopState({ hand, config, seatProfiles }) {
   const players = config.players;
   const heroSeat = config.heroSeat;
   const buttonSeat = hand.buttonSeat;
-  const sbSeat = players === 2 ? buttonSeat : (buttonSeat + 1) % players;
-  const bbSeat = players === 2 ? (buttonSeat + 1) % players : (buttonSeat + 2) % players;
-  const positions = getSeatPositions({ players, buttonSeat });
   const contributions = Object.fromEntries(Array.from({ length: players }, (_, seat) => [seat, 0]));
   const stacks = startingStacksForConfig(config, players);
   const folded = Object.fromEntries(Array.from({ length: players }, (_, seat) => [seat, false]));
@@ -123,12 +126,28 @@ function createInitialPreflopState({ hand, config, seatProfiles }) {
     }
   }
 
+  // B5: the button, blinds, and positions are dealt only among live (non-busted)
+  // seats so eliminated players aren't "half in". Reuse the dealer's blind seats
+  // when present so the engine and the table agree.
+  const liveSeats = [];
+  for (let seat = 0; seat < players; seat += 1) {
+    if (!out[seat]) liveSeats.push(seat);
+  }
+  const liveAware = liveSeats.length >= 2 ? liveSeats : undefined;
+  const { sbSeat, bbSeat } = (hand.sbSeat !== undefined && hand.bbSeat !== undefined)
+    ? { sbSeat: hand.sbSeat, bbSeat: hand.bbSeat }
+    : getBlindSeats({ players, buttonSeat, liveSeats: liveAware });
+  const positions = getSeatPositions({ players, buttonSeat, liveSeats: liveAware });
+
   const blinds = config.blinds;
 
   // A2: effective stack in bb, measured from the starting stacks BEFORE blinds
   // are posted (the relevant figure for choosing the opening range). Computed
   // once here so the bet tip and the leak grader read the same engine truth.
   const effectiveStackBbValue = effectiveStackBb({ stacks, bb: blinds.bb });
+  // Open-raise sizing is expressed in big blinds (e.g. 2.5bb); multiply by the
+  // actual big blind so opens are real sizes when blinds aren't 1 (tournament).
+  const bigBlind = blinds.bb;
 
   postBlind({ contributions, stacks, seat: sbSeat, amount: blinds.sb });
   postBlind({ contributions, stacks, seat: bbSeat, amount: blinds.bb });
@@ -136,6 +155,7 @@ function createInitialPreflopState({ hand, config, seatProfiles }) {
   return {
     status: "active",
     effectiveStackBb: effectiveStackBbValue,
+    bigBlind,
     result: null,
     winnerSeat: null,
     winnerSeats: [],
@@ -212,16 +232,36 @@ function applyVillainDecision(preflop, seat) {
   const profile = profileForSeat(preflop, seat);
   const callAmount = amountToCall(preflop, seat);
 
+  // A4: heads-up short-stack play — at push/fold depth the opener jams-or-folds
+  // and the defender calls-or-folds, using the same depth-aware charts the
+  // trainer grades on. Returns null when normal (deep) play applies.
+  const pushFold = headsUpPushFoldAction({
+    effBb: preflop.effectiveStackBb,
+    players: preflop.players,
+    hand,
+    facingOpen: preflop.voluntaryRaiserSeat !== null,
+  });
+
   if (preflop.voluntaryRaiserSeat === null) {
     if (position === "BB" && callAmount === 0) {
       applyCheck(preflop, seat);
       return;
     }
 
+    if (pushFold === "jam") {
+      applyJam(preflop, seat);
+      return;
+    }
+    if (pushFold === "fold") {
+      applyFold(preflop, seat, "folds");
+      return;
+    }
+
     const adjusted = adjustedOpeningRange({ position, profile });
 
     if (hand && adjusted.hands.has(hand)) {
-      applyRaise(preflop, seat, openingSizeForPosition(position, profile), "raises to");
+      const openTo = openingSizeForPosition(position, profile) * (preflop.bigBlind || 1);
+      applyRaise(preflop, seat, openTo, "raises to");
     } else {
       applyFold(preflop, seat, "folds");
     }
@@ -229,6 +269,15 @@ function applyVillainDecision(preflop, seat) {
   }
 
   if (preflop.raiseCount === 1) {
+    if (pushFold === "call") {
+      applyCall(preflop, seat, "calls");
+      return;
+    }
+    if (pushFold === "fold") {
+      applyFold(preflop, seat, "folds");
+      return;
+    }
+
     const decision = decideFacingOpen({ hand, position, profile });
 
     if (decision.action === "threeBet") {
@@ -295,6 +344,13 @@ function applyRaise(preflop, seat, requestedTotal, action) {
     candidate !== seat && !preflop.folded[candidate] && !preflop.allIn[candidate]
   ));
   preflop.actionLog.push(logEntry({ seat, action, size: total }));
+}
+
+// A4: open-jam — raise all-in. applyRaise caps the requested total at the seat's
+// stack, so requesting the full stack puts the seat all-in.
+function applyJam(preflop, seat) {
+  const allInTotal = preflop.contributions[seat] + preflop.stacks[seat];
+  applyRaise(preflop, seat, allInTotal, "raises to");
 }
 
 function completeOpenAction(preflop) {

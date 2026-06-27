@@ -45,6 +45,7 @@ describe("coach snapshot", () => {
         heroSeat: 3,
         heroPos: "LJ",
         blinds: [0.5, 1],
+        effectiveStackBb: null,
       },
       street: "turn",
       hero: ["Ah", "6h"],

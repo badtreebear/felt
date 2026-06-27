@@ -19,19 +19,50 @@ const RFI_LABEL_BY_POSITION = {
   BTN: "BTN",
 };
 
-export function getSeatPositions({ players, buttonSeat }) {
-  const labels = POSITION_BY_BUTTON_ORDER[players];
+// Live seats (in seat order). B5: eliminated/sitting-out seats are excluded so
+// the button, blinds, and positions are dealt only among players still in.
+function liveSeatRing({ players, liveSeats }) {
+  if (Array.isArray(liveSeats) && liveSeats.length) {
+    return [...liveSeats].sort((a, b) => a - b);
+  }
+  return Array.from({ length: players }, (_, seat) => seat);
+}
+
+export function getSeatPositions({ players, buttonSeat, liveSeats }) {
+  const live = liveSeatRing({ players, liveSeats });
+  const liveCount = live.length;
+  const labels = POSITION_BY_BUTTON_ORDER[liveCount];
 
   if (!labels) {
-    throw new Error("Positions require 2 to 9 players.");
+    throw new Error("Positions require 2 to 9 live players.");
   }
 
-  return Object.fromEntries(
-    Array.from({ length: players }, (_, seat) => {
-      const distanceFromButton = (seat - buttonSeat + players) % players;
-      return [seat, labels[distanceFromButton]];
-    }),
-  );
+  // Order the live seats starting from the button; eliminated seats get no
+  // position. Falls back to the first live seat if the button itself is out.
+  const buttonIndex = Math.max(0, live.indexOf(buttonSeat));
+  const positions = {};
+  for (let i = 0; i < liveCount; i += 1) {
+    const seat = live[(buttonIndex + i) % liveCount];
+    positions[seat] = labels[i];
+  }
+  return positions;
+}
+
+// B5: the small/big-blind seats among the live players (heads-up: the button is
+// the SB). Used by both the dealer (deck.js) and the engine so they agree.
+export function getBlindSeats({ players, buttonSeat, liveSeats }) {
+  const live = liveSeatRing({ players, liveSeats });
+  const liveCount = live.length;
+  const buttonIndex = Math.max(0, live.indexOf(buttonSeat));
+
+  if (liveCount === 2) {
+    return { sbSeat: live[buttonIndex], bbSeat: live[(buttonIndex + 1) % liveCount] };
+  }
+
+  return {
+    sbSeat: live[(buttonIndex + 1) % liveCount],
+    bbSeat: live[(buttonIndex + 2) % liveCount],
+  };
 }
 
 export function normalizeRangePosition(position) {
