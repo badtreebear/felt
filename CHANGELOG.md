@@ -3,6 +3,21 @@
 All notable changes to Felt are recorded here. Releases prior to v0.9.0 are
 available as git tags (`v0.4.0`–`v0.8.0`).
 
+## [0.10.1] — 2026-06-27
+
+### Fixes
+
+- **Dealer button now rotates one seat per hand** — clockwise, skipping busted
+  seats — instead of jumping to a random seat each hand. The blinds stay one and
+  two seats ahead of it, and replays/drills still reproduce their exact button.
+- The preflop **Raise** box is hidden when no legal raise is possible (facing an
+  all-in that already covers you), matching the postflop behaviour — you'll see
+  Fold / Call only.
+- Registered the `calculator` and `book-open` icons, silencing two console
+  warnings and rendering those icons properly.
+
+[0.10.1]: https://github.com/badtreebear/felt/releases/tag/v0.10.1
+
 ## [0.10.0] — 2026-06-27
 
 ### Tournament mode

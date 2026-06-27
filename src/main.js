@@ -1,4 +1,4 @@
-import { BarChart3, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Trash2, Upload, Users, Zap } from "lucide";
+import { BarChart3, BookOpen, Calculator, createIcons, Download, RefreshCcw, RotateCcw, Settings, Shuffle, StepForward, Trash2, Upload, Users, Zap } from "lucide";
 import { coachChatCompletion, testCoachConnection as pingCoachConnection } from "./coach/client.js";
 import { coachStatus, isCoachConfigured, loadCoachConfig, saveCoachConfig, loadCoachSettings, saveCoachSettings, normalizeSavedCoachConfig, createCoachConfigId, normalizeCoachConfig } from "./coach/config.js";
 import { clearCoachKey, loadCoachKey, setCoachKey } from "./coach/key-store.js";
@@ -153,12 +153,27 @@ const actions = {
     const liveSeats = Object.entries(startingStacks)
       .filter(([, amount]) => Number(amount) > 0)
       .map(([seat]) => Number(seat));
+
+    // The dealer button rotates one live seat per hand (not re-randomised each
+    // hand). Replaying the current hand reproduces its exact button; a drill/other
+    // seed and the first hand of a session fall back to the deck's random draw.
+    const prevButton = state.hand?.buttonSeat;
+    let buttonSeat;
+    if (seed && seed === state.hand?.seed) {
+      buttonSeat = prevButton;
+    } else if (seed || resetStacks || !Number.isInteger(prevButton)) {
+      buttonSeat = undefined;
+    } else {
+      buttonSeat = nextLiveButtonSeat(prevButton, liveSeats);
+    }
+
     const hand = dealHoldemHand({
       players,
       heroSeat,
       blinds,
       seed,
       liveSeats,
+      buttonSeat,
     });
 
     updateState((draft) => {
@@ -1897,6 +1912,8 @@ subscribe("*", () => {
       Upload,
       Users,
       BarChart3,
+      BookOpen,
+      Calculator,
       Trash2,
       Zap,
     },
@@ -2208,6 +2225,16 @@ function normalizeStacksForPlayers(stacks, players, fallbackStack) {
 
 function defaultStacksForPlayers(players, stack) {
   return Object.fromEntries(Array.from({ length: players }, (_, seat) => [seat, stack]));
+}
+
+// Next live seat clockwise from the previous button (wrapping around), so the
+// dealer button advances one occupied seat per hand and skips busted seats.
+function nextLiveButtonSeat(prevButton, liveSeats) {
+  const live = [...liveSeats].sort((a, b) => a - b);
+  if (!live.length) {
+    return prevButton;
+  }
+  return live.find((seat) => seat > prevButton) ?? live[0];
 }
 
 function autoActionLimitForState(currentState) {

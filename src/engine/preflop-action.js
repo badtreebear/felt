@@ -98,12 +98,17 @@ export function legalHeroActions(preflop) {
   // using it here let the box sit below the legal minimum (the "raise to 100"
   // bug while facing a 500 raise).
   const minRaiseTo = preflop.currentBet + preflop.minRaise;
+  const maxRaiseTo = preflop.contributions[preflop.heroSeat] + preflop.stacks[preflop.heroSeat];
 
   return {
     canAct: true,
     callAmount,
     minRaiseTo,
-    maxRaiseTo: preflop.contributions[preflop.heroSeat] + preflop.stacks[preflop.heroSeat],
+    maxRaiseTo,
+    // A real raise is only possible if the hero can put in more than a call —
+    // i.e. their all-in to-amount exceeds the current bet. Facing an all-in that
+    // already covers them, this is false and the UI should hide the raise box.
+    canRaise: maxRaiseTo > preflop.currentBet,
     stack: preflop.stacks[preflop.heroSeat] || 0,
   };
 }

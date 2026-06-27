@@ -914,33 +914,41 @@ function createPreflopHeroActionControls(state, actions) {
 
   buttonRow.append(foldButton, callButton);
 
-  const raiseRow = createWagerRow({
-    state,
-    actions,
-    min: legal.minRaiseTo,
-    max: legal.maxRaiseTo,
-    initial: state.ui.heroRaiseTo || legal.minRaiseTo,
-    label: "Raise to",
-    confirmLabel: "Raise",
-    onCommit: (amount) => actions.heroPreflopAction("raise", amount),
-  });
+  wrapper.append(heading, buttonRow);
 
-  // All-in raise (only when the hero has chips beyond a call).
-  if (!callIsAllIn && legal.maxRaiseTo > legal.callAmount) {
-    raiseRow.append(createHeroActionButton(
-      `All in ${formatAmount(legal.maxRaiseTo, state)}`,
-      () => actions.heroPreflopAction("raise", legal.maxRaiseTo),
-    ));
+  // Only show the raise box/presets when a legal raise is actually possible —
+  // facing an all-in that already covers the hero, there's no raise (matches the
+  // postflop behaviour). Otherwise the box showed a misleading value.
+  if (legal.canRaise) {
+    const raiseRow = createWagerRow({
+      state,
+      actions,
+      min: legal.minRaiseTo,
+      max: legal.maxRaiseTo,
+      initial: state.ui.heroRaiseTo || legal.minRaiseTo,
+      label: "Raise to",
+      confirmLabel: "Raise",
+      onCommit: (amount) => actions.heroPreflopAction("raise", amount),
+    });
+
+    // All-in raise (only when the hero has chips beyond a call).
+    if (!callIsAllIn && legal.maxRaiseTo > legal.callAmount) {
+      raiseRow.append(createHeroActionButton(
+        `All in ${formatAmount(legal.maxRaiseTo, state)}`,
+        () => actions.heroPreflopAction("raise", legal.maxRaiseTo),
+      ));
+    }
+
+    const presetRow = createPotPresetRow({
+      actions,
+      pot: state.hand.pot,
+      min: legal.minRaiseTo,
+      max: legal.maxRaiseTo,
+    });
+
+    wrapper.append(raiseRow, presetRow);
   }
 
-  const presetRow = createPotPresetRow({
-    actions,
-    pot: state.hand.pot,
-    min: legal.minRaiseTo,
-    max: legal.maxRaiseTo,
-  });
-
-  wrapper.append(heading, buttonRow, raiseRow, presetRow);
   return wrapper;
 }
 

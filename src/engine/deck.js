@@ -59,7 +59,7 @@ export function shuffleDeck(deck = createDeck(), seedOrRng = createSeed()) {
   return shuffled;
 }
 
-export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2), blinds, seed, liveSeats } = {}) {
+export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2), blinds, seed, liveSeats, buttonSeat: requestedButtonSeat } = {}) {
   if (!Number.isInteger(players) || players < 2 || players > 9) {
     throw new Error("Texas Hold'em requires 2 to 9 players.");
   }
@@ -91,7 +91,14 @@ export function dealHoldemHand({ players = 6, heroSeat = Math.floor(players / 2)
   const live = Array.isArray(liveSeats) && liveSeats.length >= 2
     ? [...liveSeats].sort((a, b) => a - b)
     : Array.from({ length: players }, (_, seat) => seat);
-  const buttonSeat = live[Math.floor(rng() * live.length)];
+  // Use the caller-supplied button (the session rotates it one seat per hand) when
+  // it's a valid live seat; otherwise fall back to a random draw (first hand of a
+  // session, or a seed-based deal that reproduces its own button). This rng draw
+  // is the LAST one, after all cards are dealt, so skipping it never changes the
+  // cards a seed produces.
+  const buttonSeat = (Number.isInteger(requestedButtonSeat) && live.includes(requestedButtonSeat))
+    ? requestedButtonSeat
+    : live[Math.floor(rng() * live.length)];
   const { sbSeat, bbSeat } = getBlindSeats({ players, buttonSeat, liveSeats: live });
   const postedBlinds = blinds || { sb: 0.5, bb: 1 };
 
