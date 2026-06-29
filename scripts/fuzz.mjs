@@ -61,7 +61,19 @@ function summary() {
   if (issues > 0) console.log(`details:      fuzz-report.log (replay: npm run fuzz -- --seed=<n>)`);
 }
 
-process.on("SIGINT", () => { stopping = true; summary(); process.exit(issues > 0 ? 1 : 0); });
+let sigintCount = 0;
+process.on("SIGINT", () => {
+  sigintCount += 1;
+  if (sigintCount >= 2) {
+    // Second Ctrl-C: don't wait for the loop to yield — hard stop now.
+    console.log("\n(forced stop)");
+    summary();
+    process.exit(issues > 0 ? 1 : 0);
+  }
+  // First Ctrl-C: ask the loop to stop at its next yield point.
+  stopping = true;
+  console.log("\nstopping… (Ctrl-C again to force)");
+});
 
 console.log([
   "Felt fuzzer running.",
@@ -78,35 +90,47 @@ let seed = (Date.now() % 1_000_000) >>> 0;
 const HEARTBEAT_EVERY = 25_000;
 
 const STOP_CHECK_EVERY = 5_000; // how often to poll the time budget / stop-file
-while (!stopping && hands < handLimit) {
-  const hits = playHand(seed);
-  if (hits.length) {
-    issues += hits.length;
-    for (const h of hits) logIssue(seed, h);
-  }
-  hands++;
-  seed = (seed + 1) >>> 0;
+const YIELD_EVERY = 2_000;      // yield to the event loop so Ctrl-C/timers can run
 
-  if (hands % STOP_CHECK_EVERY === 0) {
-    // Time budget (--minutes) — self-terminating for background runs.
-    if ((Date.now() - start) / 60000 >= minutesLimit) {
-      console.log(`\nreached --minutes=${minutesLimit} budget; stopping.`);
-      break;
+const yieldToEventLoop = () => new Promise((r) => setImmediate(r));
+
+async function run() {
+  while (!stopping && hands < handLimit) {
+    const hits = playHand(seed);
+    if (hits.length) {
+      issues += hits.length;
+      for (const h of hits) logIssue(seed, h);
     }
-    // Stop-file: works even when Ctrl-C can't reach a backgrounded process.
-    // Create a file named STOP-FUZZ in the project folder to halt gracefully.
-    if (existsSync(STOP_FILE)) {
-      console.log(`\nSTOP-FUZZ file found; stopping.`);
-      try { rmSync(STOP_FILE); } catch { /* leave it if we can't remove */ }
-      break;
+    hands++;
+    seed = (seed + 1) >>> 0;
+
+    if (hands % STOP_CHECK_EVERY === 0) {
+      if ((Date.now() - start) / 60000 >= minutesLimit) {
+        console.log(`\nreached --minutes=${minutesLimit} budget; stopping.`);
+        break;
+      }
+      if (existsSync(STOP_FILE)) {
+        console.log(`\nSTOP-FUZZ file found; stopping.`);
+        try { rmSync(STOP_FILE); } catch { /* leave it if we can't remove */ }
+        break;
+      }
+    }
+
+    if (hands % HEARTBEAT_EVERY === 0) {
+      const mins = ((Date.now() - start) / 60000).toFixed(1);
+      process.stdout.write(`▶ ${hands.toLocaleString()} hands · ${issues} issues · ${mins} min\n`);
+    }
+
+    // Pause briefly so queued handlers (SIGINT from Ctrl-C, the --minutes timer)
+    // get a chance to run. Without this the tight loop blocks them entirely —
+    // which is exactly why Ctrl-C appeared to do nothing.
+    if (hands % YIELD_EVERY === 0) {
+      await yieldToEventLoop();
     }
   }
 
-  if (hands % HEARTBEAT_EVERY === 0) {
-    const mins = ((Date.now() - start) / 60000).toFixed(1);
-    process.stdout.write(`▶ ${hands.toLocaleString()} hands · ${issues} issues · ${mins} min\n`);
-  }
+  summary();
+  process.exit(issues > 0 ? 1 : 0);
 }
 
-summary();
-process.exit(issues > 0 ? 1 : 0);
+run();
