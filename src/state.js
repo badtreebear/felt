@@ -87,6 +87,7 @@ export const state = {
     showMaths: false,
     showThreats: false,
     overbetWarn: false,
+    deepSizing: false,
     actionDelayMs: 1000,
     settingsOpen: false,
     rosterOpen: false,

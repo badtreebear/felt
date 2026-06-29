@@ -16,7 +16,7 @@ export function createPopover({ id, title, onClose, children }) {
   close.className = "popover__close";
   close.title = "Close";
   close.setAttribute("aria-label", "Close popover");
-  close.textContent = "X";
+  close.textContent = "×";
   close.addEventListener("click", onClose);
 
   const body = document.createElement("div");

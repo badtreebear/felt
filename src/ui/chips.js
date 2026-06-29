@@ -2,6 +2,7 @@ import { callVerdict } from "../engine/ev.js";
 import { finalPotAfterCall, breakevenFoldFraction, valueBluffRatio } from "../engine/potodds.js";
 import { legalPostflopActions } from "../engine/postflop-action.js";
 import { recommendHeroSize } from "../engine/bet-sizing.js";
+import { heroOuts } from "../engine/outs.js";
 import { getSeatPositions } from "../engine/positions.js";
 import { villainRangeGridsForSpot } from "../engine/postflop-ev.js";
 import { boardThreats } from "../engine/board-threats.js";
@@ -577,6 +578,74 @@ function preflopChartRecommendation(state) {
   };
 }
 
+const OUT_RANK_ORDER = "23456789TJQKA";
+const OUT_SUIT_ORDER = "shdc";
+
+function sortOutCards(cards) {
+  return [...cards].sort((a, b) => {
+    const rankDelta = OUT_RANK_ORDER.indexOf(b.slice(0, -1)) - OUT_RANK_ORDER.indexOf(a.slice(0, -1));
+    if (rankDelta !== 0) {
+      return rankDelta; // high rank first
+    }
+    return OUT_SUIT_ORDER.indexOf(a.slice(-1)) - OUT_SUIT_ORDER.indexOf(b.slice(-1));
+  });
+}
+
+// Hero-only outs + rule of 2 & 4, shown on the flop/turn. "Improve" probability,
+// not win equity — the equity number above is the accurate win read.
+function heroOutsSection(state) {
+  const heroCards = state.hand.holeCards?.[state.config.heroSeat] || [];
+  const board = state.hand.board || [];
+  const { outs, cardsToCome, improvePct, cards } = heroOuts({ holeCards: heroCards, board });
+
+  if (cardsToCome === 0) {
+    return null; // preflop or river — nothing to draw to
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "bet-tip__section";
+
+  const rule = cardsToCome === 2 ? "rule of 4" : "rule of 2";
+  const when = cardsToCome === 2 ? "by the river" : "on the river";
+
+  wrap.append(sectionLabel(`Your outs - ${rule}`));
+
+  if (outs <= 0) {
+    wrap.append(paragraph("No clean improving cards — you're either drawing thin or already made."));
+    return wrap;
+  }
+
+  // The out cards themselves, displayed as plain text with suit symbols
+  const sortedCards = sortOutCards(cards);
+  const cardsLine = document.createElement("p");
+  cardsLine.className = "bet-tip__cards";
+
+  sortedCards.forEach((card, index) => {
+    const rank = card.slice(0, -1);
+    const suit = card.slice(-1);
+    const displayRank = rank === "T" ? "10" : rank;
+    const suitSymbol = { s: "♠", h: "♥", d: "♦", c: "♣" }[suit];
+
+    const cardSpan = document.createElement("span");
+    cardSpan.className = `card-symbol card-symbol--${suit}`;
+    cardSpan.textContent = displayRank + suitSymbol;
+    cardsLine.append(cardSpan);
+
+    if (index < sortedCards.length - 1) {
+      cardsLine.append(" ");
+    }
+  });
+
+  wrap.append(cardsLine);
+
+  // Stats line: just the outs count and improve percentage, no rule mention
+  const statsLine = paragraph(`${outs} out${outs === 1 ? "" : "s"} → ~${improvePct}% to improve ${when}.\n\nCounts cards that better your own hand only — a quick estimate that can overcount when an out also helps a villain. The equity above is the accurate win %.`);
+  statsLine.className = "bet-tip__stats";
+  wrap.append(statsLine);
+
+  return wrap;
+}
+
 function betTipBody(state, actions) {
   const body = document.createElement("div");
   body.className = "bet-tip";
@@ -596,6 +665,11 @@ function betTipBody(state, actions) {
     engineWrap.append(nums);
   }
   body.append(engineWrap);
+
+  const outsSection = heroOutsSection(state);
+  if (outsSection) {
+    body.append(outsSection);
+  }
 
   // Phase 15 — overbet guard: if the intended size is too big for your relative
   // strength, say so right under the recommendation.

@@ -26,6 +26,9 @@ describe("scorePostflopSizing — overvalued-hand leak", () => {
     expect(decision.leak).toBe(true);
     expect(decision.leakType).toBe("overvalued your hand");
     expect(decision.costBb).toBe(5);
+    // Names the board threats so live grading can explain the danger concretely.
+    // Monotone heart board -> a flush is possible and beats top pair.
+    expect(decision.beats).toContain("flush");
   });
 
   it("does NOT flag a big bet with a strong hand (value, not a leak)", () => {
@@ -64,7 +67,8 @@ describe("scorePostflopSizing — overvalued-hand leak", () => {
     })).toBeNull();
   });
 
-  it("still flags an undersized bet for review", () => {
+  it("flags a small bet neutrally when there's no equity read (analysis off)", () => {
+    // No commitmentEval -> we never advise betting bigger with an unknown hand.
     const decision = scorePostflopSizing({
       postflop: postflop(),
       action: "bet",
@@ -73,7 +77,35 @@ describe("scorePostflopSizing — overvalued-hand leak", () => {
       commitmentEval: null,
       board: ["Ah", "9h", "2h"],
     });
-    expect(decision.leakType).toBe("undersized bet (review)");
+    expect(decision.leakType).toBe("small bet (review)");
+    expect(decision.recommended).not.toMatch(/larger/);
+    expect(decision.costBb).toBe(0);
+  });
+
+  it("suggests sizing up a small bet ONLY when hero is ahead (deep analysis on)", () => {
+    // Strong hand, small bet -> undersized value bet, advise larger sizing.
+    const aheadDecision = scorePostflopSizing({
+      postflop: postflop(),
+      action: "bet",
+      committed: 5,
+      allIn: false,
+      commitmentEval: { equity: 0.82 },
+      board: ["Ah", "9h", "2h"],
+    });
+    expect(aheadDecision.leakType).toBe("undersized value bet");
+    expect(aheadDecision.recommended).toMatch(/larger/);
+
+    // Weak hand, small bet -> NOT advised to bet bigger (the bottom-pair case).
+    const behindDecision = scorePostflopSizing({
+      postflop: postflop(),
+      action: "bet",
+      committed: 5,
+      allIn: false,
+      commitmentEval: { equity: 0.28 },
+      board: ["Ah", "9h", "2h"],
+    });
+    expect(behindDecision.leakType).toBe("small bet (review)");
+    expect(behindDecision.recommended).not.toMatch(/larger/);
   });
 
   it("leaves the all-in 'got it in light' leak unchanged", () => {

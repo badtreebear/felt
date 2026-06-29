@@ -53,7 +53,7 @@ import { applySeatAssignment } from "./roster/seat-assignments.js";
 import { createPlayer, loadRoster, mergeImportedRoster, normalizePlayer, saveRoster } from "./roster/store.js";
 import { resolveSeatProfilesForHand } from "./roster/weights.js";
 import { scorePreflopDecision } from "./tracker/preflop-leaks.js";
-import { scorePostflopEvDecision, scorePostflopSizing, OVERSIZED_RATIO } from "./tracker/postflop-leaks.js";
+import { scorePostflopEvDecision, scorePostflopSizing, OVERSIZED_RATIO, UNDERSIZED_RATIO } from "./tracker/postflop-leaks.js";
 import { normaliseDecision } from "./engine/decision-eval.js";
 import { buildHandRecord, createHandRecordId } from "./tracker/recording.js";
 import { loadHandsForHero, saveHandRecord } from "./tracker/store.js";
@@ -1320,6 +1320,11 @@ const actions = {
       draft.ui.overbetWarn = Boolean(value);
     });
   },
+  setDeepSizing(value) {
+    updateState((draft) => {
+      draft.ui.deepSizing = Boolean(value);
+    });
+  },
   setDisplayUnit(displayUnit) {
     updateState((draft) => {
       draft.ui.displayUnit = displayUnit;
@@ -1466,7 +1471,12 @@ const actions = {
         config: draft.config,
         postflop: pre,
       });
-      const callFoldDecision = scorePostflopEvDecision({ postflop: pre, action, evaluation });
+      const callFoldDecision = scorePostflopEvDecision({
+        postflop: pre,
+        action,
+        evaluation,
+        bb: draft.config.blinds?.bb,
+      });
 
       const postflop = applyHeroPostflopAction(pre, {
         action,
@@ -1484,8 +1494,14 @@ const actions = {
         // computed only when one of those is in play, so normal bets pay no
         // extra simulation.
         const potForRatio = Math.max(0, Number(pre?.pot) || 0);
-        const oversized = potForRatio > 0 && committed / potForRatio >= OVERSIZED_RATIO;
-        const commitmentEval = (allIn || oversized)
+        const ratio = potForRatio > 0 ? committed / potForRatio : 0;
+        const oversized = ratio >= OVERSIZED_RATIO;
+        // "Deep sizing analysis" (opt-in): also run the if-called equity sim on
+        // UNDERSIZED bets, so "bet larger" can be gated on actually being ahead
+        // instead of pure bet/pot geometry. Off by default — small bets otherwise
+        // pay no extra simulation (the sim is a synchronous main-thread cost).
+        const undersizedDeep = draft.ui.deepSizing && ratio > 0 && ratio <= UNDERSIZED_RATIO;
+        const commitmentEval = (allIn || oversized || undersizedDeep)
           ? evaluateHeroCommitment({ hand: draft.hand, config: draft.config, postflop: pre, committed })
           : null;
         sizingDecision = scorePostflopSizing({
@@ -1495,6 +1511,7 @@ const actions = {
           allIn,
           commitmentEval,
           board: draft.hand.board,
+          bb: draft.config.blinds?.bb,
         });
       }
 

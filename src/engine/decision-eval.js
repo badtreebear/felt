@@ -24,6 +24,7 @@ export function normaliseDecision(decision) {
   const recommended = decision.recommended || "";
   const rangeKind = decision.rangeKind || "";
   const leakType = decision.leakType || "";
+  const beats = Array.isArray(decision.beats) ? decision.beats : null;
 
   if (!recommended || recommended === "unknown") {
     return {
@@ -39,11 +40,18 @@ export function normaliseDecision(decision) {
     };
   }
 
-  const isSizing = street && street !== "preflop" && !decision.evCall;
-  const isEvCall = typeof decision.evCall === "number";
+  // A postflop bet/raise is a sizing/commitment decision (undersized review,
+  // overvalued, got-it-in good/light). These are graded on the leak/good flags,
+  // NOT on call/fold EV — even though the all-in "got it in" reads carry an
+  // evCall, so we must route on the action, not on the presence of evCall.
+  const isCommitment = street && street !== "preflop"
+    && (heroAction === "bet" || heroAction === "raise");
+  const isEvCall = !isCommitment && typeof decision.evCall === "number";
 
-  if (isSizing) {
-    const matched = !decision.leak && !decision.good ? true : !decision.leak;
+  if (isCommitment) {
+    const matched = !decision.leak;  // a "good" commitment matches the best line
+    // Show the EV magnitude as the deviation only for leaks; good/neutral are 0.
+    const ev = Math.abs(Number(decision.evCall) || 0);
     return {
       street,
       spot,
@@ -51,9 +59,11 @@ export function normaliseDecision(decision) {
       heroAction,
       recommended,
       matched,
-      evDeltaBb: 0,
-      reason: decision.leak ? (leakType || "sizing review") : null,
+      evDeltaBb: decision.leak && ev > 0 ? -roundBb(ev) : 0,
+      benefitBb: decision.good ? roundBb(Math.abs(Number(decision.benefitBb) || ev)) : 0,
+      reason: decision.leak ? (leakType || "sizing review") : (decision.good ? leakType : null),
       rangeKind,
+      beats,
     };
   }
 

@@ -3,6 +3,59 @@
 All notable changes to Felt are recorded here. Releases prior to v0.9.0 are
 available as git tags (`v0.4.0`–`v0.8.0`).
 
+## [0.11.0] — 2026-06-29
+
+### Live grading — plain-English coaching
+
+Live-grading feedback now explains itself instead of showing terse labels. Each
+graded decision adds a coaching sentence — a leak says *why* it leaks and what to
+do instead, and where "pot control" is the lesson it's phrased as an explanation
+rather than a vague leak category.
+
+- The **overplayed-hand** explanation now names the actual danger on the board
+  (e.g. "the board already makes a flush or a straight possible") using the same
+  threat read as the *what beats you* strip, instead of an abstract "respect the
+  board".
+
+### Outs — "Your outs / rule of 2 & 4"
+
+- The Bet tip now lists your **clean outs** as mini cards with a rule-of-2/4
+  improve estimate on the flop and turn, and the card row has room to breathe so
+  it no longer sits cramped.
+
+### Tournament fixes
+
+- **Chips ↔ big blinds fixed in tournament grading.** Sizing labels and EV reads
+  were treating chips as big blinds, so with 200-chip blinds a 2,838-chip call
+  showed as "facing 2,838 bb" and a -12 bb loss showed as "-2,400 bb". Labels now
+  read `2,838 · 14.2bb` and EV reads are correct. Cash play (1-chip blind) is
+  unchanged.
+
+### Sizing feedback fixes
+
+- **No more "bet bigger with a weak hand."** The undersized-bet hint was pure
+  bet/pot geometry and ignored your cards, so it could tell you to size up with
+  bottom pair. Small bets now read as a neutral *blocker / thin / give-up* review
+  by default.
+- New **Deep sizing analysis** toggle (Settings → Coaching aids, off by default):
+  when on, the equity sim runs on small bets too, so "size up for value" only
+  appears when you're genuinely ahead of the calling range. Off by default
+  because the sim is a brief main-thread cost.
+
+### Grading correctness fix
+
+- **Good all-ins are no longer graded as mistakes.** Getting the chips in ahead
+  ("got it in good") was misrouted through the call/fold logic and shown as a
+  negative "missed" with the sign of its EV flipped (your +56.5 bb of value read
+  as -56.5 bb). It now reads as a good play with the value shown as a gain.
+
+### UI
+
+- The popover **close button is pinned to the top-right** corner (a proper ×) so
+  it reads like a normal window close instead of sitting on the left.
+
+[0.11.0]: https://github.com/badtreebear/felt/releases/tag/v0.11.0
+
 ## [0.10.1] — 2026-06-27
 
 ### Fixes

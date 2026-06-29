@@ -103,8 +103,13 @@ export function recommendHeroSize({
   }
   fraction = Math.min(1.25, fraction + texture * 0.25);
 
+  // `cleanPot` is the FULL current pot (it already includes the bet/raises in
+  // front of the hero). A pot-fraction raise sizes off the pot AFTER the hero
+  // calls = cleanPot + toCall — so raise-to = call + fraction of that. (Using
+  // 2 * toCall here double-counted the faced bet and over-sized raises in
+  // raised/multiway pots.)
   const target = facingBet
-    ? toCall + (cleanPot + 2 * toCall) * fraction
+    ? toCall + (cleanPot + toCall) * fraction
     : cleanPot * fraction;
 
   let amount = target;

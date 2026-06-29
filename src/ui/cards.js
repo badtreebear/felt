@@ -101,3 +101,28 @@ export function createCardRow(cards, options = {}) {
   cards.forEach((card) => row.append(createCard(card, options)));
   return row;
 }
+
+// Tiny text card (rank + suit glyph, red for hearts/diamonds) for inline use —
+// e.g. listing outs in the bet tip. Not a full SVG card.
+export function createMiniCard(card) {
+  const rank = card.slice(0, -1);
+  const suit = card.slice(-1);
+
+  const el = document.createElement("span");
+  el.className = "mini-card";
+  if (suit === "h" || suit === "d") {
+    el.classList.add("mini-card--red");
+  }
+  el.setAttribute("aria-label", `${displayRank(rank)} of ${SUIT_NAMES[suit]}`);
+
+  const rankEl = document.createElement("span");
+  rankEl.className = "mini-card__rank";
+  rankEl.textContent = displayRank(rank);
+
+  const suitEl = document.createElement("span");
+  suitEl.className = "mini-card__suit";
+  suitEl.textContent = SUIT_SYMBOLS[suit];
+
+  el.append(rankEl, suitEl);
+  return el;
+}

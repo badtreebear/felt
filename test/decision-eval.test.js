@@ -175,3 +175,62 @@ describe("normaliseDecision — unknown / no chart", () => {
     });
   });
 });
+
+describe("normaliseDecision — all-in commitment routing (got it in good/light)", () => {
+  it("treats a good all-in ('got it in good') as a matched WIN, not a negative miss", () => {
+    // Regression: this decision carries an evCall (the +EV of getting it in), so
+    // the old code misrouted it into the call/fold path and showed it as a
+    // '-56.5bb miss'. It is a good play: matched, zero deviation, positive benefit.
+    const result = normaliseDecision({
+      street: "turn",
+      spot: "HJ turn bet 4,342.5 · 21.7bb",
+      hand: "A7s",
+      heroAction: "bet",
+      recommended: "keep getting it in",
+      leak: false,
+      good: true,
+      leakType: "got it in good",
+      evCall: 56.5,
+      benefitBb: 56.5,
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.evDeltaBb).toBe(0);          // not -56.5
+    expect(result.benefitBb).toBe(56.5);       // value shown as a positive benefit
+    expect(result.reason).toBe("got it in good");
+  });
+
+  it("treats a bad all-in ('got it in light') as a leak with a negative delta", () => {
+    const result = normaliseDecision({
+      street: "turn",
+      spot: "HJ turn bet 20,000 · 100bb",
+      hand: "A7s",
+      heroAction: "bet",
+      recommended: "pot control / fold",
+      leak: true,
+      good: false,
+      leakType: "got it in light",
+      evCall: -7,
+    });
+
+    expect(result.matched).toBe(false);
+    expect(result.evDeltaBb).toBe(-7);
+    expect(result.reason).toBe("got it in light");
+  });
+
+  it("still routes an actual call/fold decision through the EV-call path", () => {
+    const result = normaliseDecision({
+      street: "river",
+      spot: "BB river facing 8 bb",
+      hand: "72o",
+      heroAction: "call",
+      recommended: "fold",
+      leak: true,
+      leakType: "called -EV (paid off)",
+      evCall: -1.5,
+    });
+    expect(result.matched).toBe(false);
+    expect(result.evDeltaBb).toBe(-1.5);
+    expect(result.reason).toBe("called -EV (paid off)");
+  });
+});

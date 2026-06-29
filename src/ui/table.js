@@ -13,6 +13,7 @@ import { createCard, createCardRow } from "./cards.js";
 import { createCoachPanel } from "./coach-panel.js";
 import { createMathsChips, shouldShowMathsPanel, relativeStrength, overbetVerdict } from "./chips.js";
 import { formatAmount, formatNumber } from "./formatting.js";
+import { explainLeak } from "./leak-explanations.js";
 import { createPopover } from "./popover.js";
 import { createRangeGrid, heroRangeVerdict } from "./range-grid.js";
 import { createHeroControl, createSeatAssignmentGrid, createSelectControl } from "./controls.js";
@@ -1620,12 +1621,32 @@ function describeFeedback(feedback) {
   }
 
   if (feedback.matched) {
-    return `${handLabel}${actionLabel}${spotLabel} - matched the engine (${recommendedLabel}).`;
+    // A matched decision may still carry a "good play" note (e.g. good call,
+    // good fold, got it in good) — surface the coaching sentence when we have one.
+    const praise = explainLeak(feedback.reason, { beats: feedback.beats });
+    const note = praise ? ` ${praise}` : "";
+    // A good commitment (e.g. got it in ahead) reads as a WIN, not a "matched"
+    // line — lead with the value gained instead of the engine-recommendation phrase.
+    const benefit = Number(feedback.benefitBb) || 0;
+    if (benefit > 0) {
+      return `${handLabel}${actionLabel}${spotLabel} - good play (${formatSignedBb(benefit)}).${note}`;
+    }
+    return `${handLabel}${actionLabel}${spotLabel} - matched the engine (${recommendedLabel}).${note}`;
   }
 
+  // Missed: lead with the headline (what you did, what the engine prefers, EV
+  // lost), then a plain-English explanation of the leak so the feedback teaches
+  // rather than just labels. Falls back to the terse reason when no note exists.
   const delta = formatSignedBb(feedback.evDeltaBb);
-  const reason = feedback.reason ? ` - ${feedback.reason}` : "";
-  return `${handLabel}${actionLabel}${spotLabel} - missed (engine: ${recommendedLabel}, ${delta})${reason}.`;
+  const explanation = explainLeak(feedback.reason, { beats: feedback.beats });
+  const headline = `${handLabel}${actionLabel}${spotLabel} - missed (engine: ${recommendedLabel}, ${delta}).`;
+
+  if (explanation) {
+    return `${headline} ${explanation}`;
+  }
+
+  const reason = feedback.reason ? ` ${capitalize(feedback.reason)}.` : "";
+  return `${headline}${reason}`;
 }
 
 function formatActionLabel(action) {

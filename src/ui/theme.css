@@ -1643,13 +1643,17 @@ input:focus-visible {
 }
 
 .bet-tip {
-  display: grid;
+  display: flex;
+  flex-direction: row;
   gap: 12px;
 }
 
 .bet-tip__section {
-  display: grid;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 6px;
+  width: fit-content;
 }
 
 .bet-tip__label {
@@ -1664,6 +1668,83 @@ input:focus-visible {
 .bet-tip__numbers {
   color: #d9d2c2;
   font-variant-numeric: tabular-nums;
+}
+
+/* Caveat line under the outs readout — muted and smaller so it reads as a note. */
+.bet-tip__stats {
+  font-size: 0.85rem;
+  margin: 2px 0;
+}
+
+.bet-tip__note {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.bet-tip__cards {
+  /* A wrapping row of out cards. flex + gap gives a real vertical gap between
+     wrapped rows (row-gap) so they don't sit cramped together, plus consistent
+     spacing between cards (column-gap). */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 5px;
+  row-gap: 6px;
+  margin: 4px 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-symbol {
+  white-space: nowrap;
+  background: #f7f4ed;
+  padding: 2px 4px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.card-symbol--s,
+.card-symbol--c {
+  color: #14120f;
+}
+
+.card-symbol--h,
+.card-symbol--d {
+  color: var(--suit-red);
+}
+
+/* Out cards as a wrapping row of tiny text cards. */
+.mini-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.mini-card {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #f7f4ed;
+  color: #14120f; /* spades / clubs */
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mini-card--red {
+  color: var(--suit-red);
+}
+
+.mini-card__suit {
+  font-size: 0.85em;
 }
 
 /* Phase 15 — overbet guard warning inside the Bet tip. */
@@ -1806,16 +1887,19 @@ input:focus-visible {
 }
 
 .popover__header {
+  /* The header is a positioning context for the close button (below), which is
+     absolutely pinned to the top-right corner. We reserve right padding so the
+     title text can never run under the X regardless of title length. */
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
   border-bottom: 1px solid rgba(247, 244, 237, 0.12);
-  padding: 10px 12px;
+  padding: 10px 48px 10px 12px;
 }
 
 .popover__header strong {
+  min-width: 0;   /* allow the title to shrink instead of pushing layout around */
   color: var(--brass);
 }
 
@@ -1823,15 +1907,28 @@ input:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Pinned to the top-right corner of the popover, independent of header flex
+     flow or DOM order — a conventional window-close position that no other rule
+     can shift. */
+  position: absolute;
+  top: 8px;
+  right: 10px;
   width: 28px;
   height: 28px;
+  padding: 0;
   border: 1px solid rgba(247, 244, 237, 0.36);
   border-radius: 6px;
   color: #f7f4ed;
   background: #102c27;
   cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 900;
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.popover__close:hover {
+  background: #16433b;
+  border-color: rgba(247, 244, 237, 0.6);
 }
 
 .popover__body {

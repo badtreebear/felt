@@ -243,6 +243,7 @@ function createSettingsPanel(state, actions, { scriptedMode }) {
     createSettingsSection("Coaching aids", [
       createShowThreatsControl(state, actions),
       createOverbetWarnControl(state, actions),
+      createDeepSizingControl(state, actions),
     ]),
     createSettingsSection("Coach", [createCoachSettingsPanel(state, actions, { embedded: true })]),
     createSettingsSection("Data", [createDataTools(state, actions)]),
@@ -516,6 +517,28 @@ function createOverbetWarnControl(state, actions) {
 
   const text = document.createElement("span");
   text.textContent = "Warn me when I'm overbetting a weak hand";
+
+  label.append(input, text);
+  return label;
+}
+
+// Opt-in: run the if-called equity sim on small bets too, so "bet larger" advice
+// is gated on actually being ahead of the calling range rather than pure bet/pot
+// geometry. Off by default because the sim is a synchronous (~200ms on flop/turn)
+// main-thread cost; with it off, small bets get a neutral "review" note instead.
+function createDeepSizingControl(state, actions) {
+  const label = document.createElement("label");
+  label.className = "toggle toggle--inline";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = Boolean(state.ui.deepSizing);
+  input.addEventListener("change", (event) => {
+    actions.setDeepSizing(event.currentTarget.checked);
+  });
+
+  const text = document.createElement("span");
+  text.textContent = "Deep sizing analysis (slower; grades small bets by hand strength)";
 
   label.append(input, text);
   return label;
