@@ -11,3 +11,4 @@ notes/
 .claude/
 *.log
 src-tauri/target/
+fuzz-report.log
