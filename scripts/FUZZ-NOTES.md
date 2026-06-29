@@ -6,7 +6,15 @@ scoring layer with random valid inputs (cash + tournament blinds) and asserts
 internal-consistency invariants: finite + correctly-signed EV, chip↔bb labels,
 no good play graded as a miss, no "bet bigger with a weak hand". Runs until
 Ctrl-C; issues print to screen and append to `fuzz-report.log` (gitignored),
-each reproducible with `npm run fuzz -- --seed=<n>`.
+ each reproducible with `npm run fuzz -- --seed=<n>`.
+
+Stopping it (especially when launched in the background, where Ctrl-C can't
+reach it):
+- `Ctrl-C` (foreground only)
+- `--minutes=N` — self-terminating time budget
+- `--hands=N` — stop after N hands
+- create a file named `STOP-FUZZ` in the project folder — halts gracefully at the
+  next check (~every 5k hands) and deletes itself. Works for background runs.
 
 Verified it can fail: reintroducing the all-in sign-flip bug made it flag
 thousands of issues; with the fix in place it reports 0.

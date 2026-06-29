@@ -14,7 +14,7 @@
 // resolver the app uses so JSON imports resolve. See package.json.
 
 import { playHand } from "./fuzz-core.mjs";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, rmSync } from "node:fs";
 
 const LOG = new URL("../fuzz-report.log", import.meta.url);
 
@@ -25,6 +25,8 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
 
 const quiet = Boolean(args.quiet);
 const handLimit = args.hands ? Number(args.hands) : Infinity;
+const minutesLimit = args.minutes ? Number(args.minutes) : Infinity;
+const STOP_FILE = new URL("../STOP-FUZZ", import.meta.url);
 
 function logIssue(seed, issue) {
   const line = `[seed ${seed}] ${issue}`;
@@ -61,12 +63,13 @@ function summary() {
 
 process.on("SIGINT", () => { stopping = true; summary(); process.exit(issues > 0 ? 1 : 0); });
 
-console.log("Felt fuzzer running — Ctrl-C to stop.\n");
+console.log("Felt fuzzer running. Stop with: Ctrl-C, --minutes=N, --hands=N, or create a STOP-FUZZ file in the project folder.\n");
 appendFileSync(LOG, `\n=== fuzz run @ ${new Date().toISOString()} ===\n`);
 
 let seed = (Date.now() % 1_000_000) >>> 0;
 const HEARTBEAT_EVERY = 25_000;
 
+const STOP_CHECK_EVERY = 5_000; // how often to poll the time budget / stop-file
 while (!stopping && hands < handLimit) {
   const hits = playHand(seed);
   if (hits.length) {
@@ -75,6 +78,22 @@ while (!stopping && hands < handLimit) {
   }
   hands++;
   seed = (seed + 1) >>> 0;
+
+  if (hands % STOP_CHECK_EVERY === 0) {
+    // Time budget (--minutes) — self-terminating for background runs.
+    if ((Date.now() - start) / 60000 >= minutesLimit) {
+      console.log(`\nreached --minutes=${minutesLimit} budget; stopping.`);
+      break;
+    }
+    // Stop-file: works even when Ctrl-C can't reach a backgrounded process.
+    // Create a file named STOP-FUZZ in the project folder to halt gracefully.
+    if (existsSync(STOP_FILE)) {
+      console.log(`\nSTOP-FUZZ file found; stopping.`);
+      try { rmSync(STOP_FILE); } catch { /* leave it if we can't remove */ }
+      break;
+    }
+  }
+
   if (hands % HEARTBEAT_EVERY === 0) {
     const mins = ((Date.now() - start) / 60000).toFixed(1);
     process.stdout.write(`▶ ${hands.toLocaleString()} hands · ${issues} issues · ${mins} min\n`);

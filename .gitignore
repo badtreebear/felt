@@ -13,3 +13,4 @@ notes/
 src-tauri/target/
 fuzz-report.log
 audit-report.log
+STOP-FUZZ
