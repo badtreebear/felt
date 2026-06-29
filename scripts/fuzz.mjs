@@ -63,7 +63,15 @@ function summary() {
 
 process.on("SIGINT", () => { stopping = true; summary(); process.exit(issues > 0 ? 1 : 0); });
 
-console.log("Felt fuzzer running. Stop with: Ctrl-C, --minutes=N, --hands=N, or create a STOP-FUZZ file in the project folder.\n");
+console.log([
+  "Felt fuzzer running.",
+  "  Stop it any of these ways:",
+  "    • Ctrl-C            (works when run via:  node scripts/fuzz-run.mjs)",
+  "    • npm run fuzz:stop (drops a STOP-FUZZ file — works for ANY launch)",
+  "    • --minutes=N       (self-stops after N minutes)",
+  "    • --hands=N         (self-stops after N hands)",
+  "",
+].join("\n"));
 appendFileSync(LOG, `\n=== fuzz run @ ${new Date().toISOString()} ===\n`);
 
 let seed = (Date.now() % 1_000_000) >>> 0;
