@@ -15,13 +15,23 @@ thousands of issues; with the fix in place it reports 0.
 A different question from "is the advice correct?" — this is "is there advice/a
 table AT ALL?". No poker oracle needed; it's enumeration + gap reporting.
 
-### Missing tables (preflop)
-Enumerate every spot the app can present — position × players × stack depth ×
-facing-action — call `getRangeForSpot` / `scorePreflopDecision`, and list every
-combination that falls through to `"no chart"` / `recommended: "unknown"`.
-Output: a definitive list of range gaps instead of discovering them mid-play.
-Entry points: `src/data/ranges/contextual-ranges.js` (getRangeForSpot),
-`src/tracker/preflop-leaks.js` (recommendedAction / rangeKind === "fallback").
+### Missing tables (preflop) — DONE: `npm run audit`
+`scripts/audit-core.mjs` enumerates every preflop spot that can actually occur
+(players 2-9 × seat × depth × facing-action, openers constrained to seats that
+act before hero) and classifies each as: a real chart, a FILLABLE gap, a
+KNOWN-unsupported fallback, or an ANOMALY (empty grid / all-fold / illegal rec).
+
+Finding (v0.11.0): 0 fillable gaps, 0 anomalies. RFI and vs-single-open coverage
+is complete. The only fallbacks are vs-3-bet spots, which the code deliberately
+doesn't chart yet ("no chart for this re-raised spot yet"). So the one real area
+to expand, if ever wanted, is vs-3-bet defense — a known, intentional limitation.
+
+NOTE on method: the first cut reported 28 "gaps", but they were positionally
+impossible spots (e.g. CO facing a BTN open — CO acts first) manufactured by a
+naive enumeration. Constraining openers to earlier-acting seats dropped it to 0.
+Lesson: a coverage auditor must only enumerate spots that can really happen, or
+it cries wolf. Entry points: src/data/ranges/contextual-ranges.js (getRangeForSpot),
+src/tracker/preflop-leaks.js (recommendedAction).
 
 ### Missing advice (postflop)
 Sweep realistic postflop spots and flag where the grader returns `null` (no

@@ -10,7 +10,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "tauri": "tauri",
-    "fuzz": "node scripts/fuzz-run.mjs"
+    "fuzz": "node scripts/fuzz-run.mjs",
+    "audit": "node scripts/audit-run.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

@@ -12,3 +12,4 @@ notes/
 *.log
 src-tauri/target/
 fuzz-report.log
+audit-report.log
