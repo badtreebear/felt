@@ -74,6 +74,49 @@ describe("preflop leak scoring", () => {
       leak: false,
     });
   });
+
+  it("estimates a negative EV cost for a too-wide call (priced on pot odds + equity)", () => {
+    const decision = scorePreflopDecision({
+      preflop: preflopState({
+        heroSeat: 2,
+        holeCards: ["7c", "2d"],
+        voluntaryRaiserSeat: 0,
+        aggressorSeat: 0,
+        raiseCount: 1,
+        currentBet: 2.5,
+        pot: 4,
+        bigBlind: 1,
+        contributions: { 0: 2.5, 1: 0.5, 2: 1, 3: 0, 4: 0, 5: 0 },
+        actionLog: [{ seat: 0, street: "preflop", action: "raises to", size: 2.5 }],
+      }),
+      action: "call",
+    });
+
+    expect(decision.leak).toBe(true);
+    expect(decision.leakType).toBe("defended too wide");
+    // A weak hand calling off should price as a real, non-trivial cost.
+    expect(decision.costBb).toBeGreaterThan(0);
+  });
+
+  it("assigns a clean (non-leak) preflop play zero cost", () => {
+    const decision = scorePreflopDecision({
+      preflop: preflopState({
+        heroSeat: 2,
+        holeCards: ["Ac", "5c"],
+        voluntaryRaiserSeat: 0,
+        aggressorSeat: 0,
+        raiseCount: 1,
+        currentBet: 2.5,
+        pot: 4,
+        contributions: { 0: 2.5, 1: 0.5, 2: 1, 3: 0, 4: 0, 5: 0 },
+        actionLog: [{ seat: 0, street: "preflop", action: "raises to", size: 2.5 }],
+      }),
+      action: "call",
+    });
+
+    expect(decision.leak).toBe(false);
+    expect(decision.costBb).toBe(0);
+  });
 });
 
 function preflopState(overrides = {}) {
@@ -93,6 +136,8 @@ function preflopState(overrides = {}) {
       [heroSeat]: overrides.holeCards || ["As", "Ad"],
     },
     currentBet: overrides.currentBet ?? 1,
+    pot: overrides.pot ?? Object.values(contributions).reduce((sum, amount) => sum + amount, 0),
+    bigBlind: overrides.bigBlind ?? 1,
     contributions,
     voluntaryRaiserSeat: overrides.voluntaryRaiserSeat ?? null,
     aggressorSeat: overrides.aggressorSeat ?? null,

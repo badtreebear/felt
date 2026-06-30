@@ -1007,7 +1007,7 @@ const actions = {
       return; // a request for this exact spot is already in flight
     }
 
-    const snapshot = { ...buildCoachSnapshot(state), recommendation: engineTipText(state) };
+    const snapshot = buildCoachSnapshot(state, { recommendation: engineTipText(state) });
     const messages = buildBetTipMessages({ snapshot });
 
     await requestCoachMessages({ topic, messages, maxTokens: 180 });
@@ -1168,7 +1168,7 @@ const actions = {
     });
   },
   async requestCoachExplain(topic) {
-    const snapshot = buildCoachSnapshot(state);
+    const snapshot = buildCoachSnapshot(state, { recommendation: engineTipText(state) });
     const messages = buildExplainMessages({ snapshot, topic });
 
     await requestCoachMessages({ topic, messages, maxTokens: 320 });
@@ -1208,7 +1208,7 @@ const actions = {
     const requestId = nextCoachRequestId();
     const config = { ...state.coach.config };
     const history = [...state.coach.chatHistory];
-    const snapshot = buildCoachSnapshot(state);
+    const snapshot = buildCoachSnapshot(state, { recommendation: engineTipText(state) });
     const messages = buildChatMessages({ snapshot, history, input });
 
     updateState((draft) => {
@@ -1245,7 +1245,7 @@ const actions = {
 
     const requestId = nextCoachRequestId();
     const config = { ...state.coach.config };
-    const snapshot = buildCoachSnapshot(state);
+    const snapshot = buildCoachSnapshot(state, { recommendation: engineTipText(state) });
     const messages = buildHandReviewMessages({ snapshot });
 
     updateState((draft) => {
@@ -1551,15 +1551,32 @@ function recordSessionDecision(draft, feedback) {
   }
 
   draft.session.decisions += 1;
-  if (feedback.matched) {
-    draft.session.matched += 1;
+
+  // Three-way tally. `grade` defaults to the binary matched read for any decision
+  // shape that predates the grade field, so a missing grade never miscounts.
+  const grade = feedback.grade
+    || (feedback.matched ? "neutral" : "fail");
+
+  if (grade === "good") {
+    draft.session.good += 1;
+  } else if (grade === "fail") {
+    draft.session.fail += 1;
+  } else {
+    draft.session.neutral += 1;
   }
+
+  // `matched` stays as good + neutral (everything that didn't cost EV) for any
+  // back-compat reader; the scoreboard now reads the split counters.
+  draft.session.matched = draft.session.good + draft.session.neutral;
   draft.session.evDeltaBb = Math.round((draft.session.evDeltaBb + (Number(feedback.evDeltaBb) || 0)) * 10) / 10;
 }
 
 function resetSession(draft) {
   draft.session.decisions = 0;
   draft.session.matched = 0;
+  draft.session.good = 0;
+  draft.session.neutral = 0;
+  draft.session.fail = 0;
   draft.session.evDeltaBb = 0;
 }
 

@@ -40,7 +40,13 @@ export const state = {
   session: {
     enabled: false,
     decisions: 0,
+    // Three-way live-grading tally (Good / OK / Leak). `matched` is kept as the
+    // sum of good + neutral for any back-compat readers; the scoreboard reads the
+    // split counters directly.
     matched: 0,
+    good: 0,
+    neutral: 0,
+    fail: 0,
     evDeltaBb: 0,
   },
   // B1: tournament blind schedule. Off by default so cash play is unchanged

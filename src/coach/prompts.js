@@ -7,6 +7,9 @@ export const COACH_SYSTEM_PROMPT = [
   "Use only the engine numbers in the snapshot. Do not recompute them, estimate new ones, or contradict them.",
   "If a response would conflict with an engine value, say the displayed engine value is authoritative.",
   "Mention position, ranges, pot odds, and EV when they help the hand make sense.",
+  "The snapshot's `recommendation` field is the engine's authoritative line for the spot; defer to it and never contradict it. `engine.verdict` is ONLY the raw pot-odds call/fold and is NOT the recommendation.",
+  "When `facingRaise` is false the hero is first-in (an unopened pot): the decision is raise-or-fold, NOT call/fold. Never frame completing the blind as a 'call', and ignore the pot-odds verdict for these spots.",
+  "When `villains` is present, use each villain's position, profile, and range width (rangePct) to reason about what they likely hold; a tighter range (low rangePct) that keeps betting is weighted to strong value.",
   "Do not encourage gambling beyond strategy for the hand shown.",
 ].join(" ");
 
@@ -42,6 +45,7 @@ export function buildBetTipMessages({ snapshot }) {
         "The equity, pot-odds, and EV numbers describe the immediate price only. Preflop, a hand can beat the pot-odds threshold yet still be a fold because it plays poorly out of position and realizes little of its raw equity.",
         "If the recommendation differs from what the raw pot odds suggest, follow the recommendation and explain that gap in plain language — do not tell the player to call just because equity beats the pot-odds number.",
         "Note: the snapshot's engine.verdict is only the raw pot-odds call/fold and is NOT the recommendation; defer to the recommendation field.",
+        "If facingRaise is false this is a first-in, unopened pot: present it as raise-or-fold and do not mention calling or pot odds.",
         "Do not invent or recompute numbers.",
         "Keep it under about 80 words.",
       ].join(" "),

@@ -106,6 +106,19 @@ export function comboCountForHands(hands) {
   return [...hands].reduce((sum, hand) => sum + handKeyToCombos(hand).length, 0);
 }
 
+// Absolute strength percentile of a 169-hand key across ALL starting hands
+// (0 = strongest like AA, ~1 = weakest like 72o). Uses the precomputed strength
+// ordering, so it's O(1) and synchronous — suitable for the preflop tracker's
+// rough EV estimate (it is NOT a substitute for a real equity sim).
+export function handStrengthPercentile(hand) {
+  const index = handStrengthIndex.get(hand);
+  if (index === undefined) {
+    return 1;
+  }
+  const last = handStrengthIndex.size - 1;
+  return last > 0 ? index / last : 0;
+}
+
 export function handRankPercent(hand, hands) {
   const sorted = [...hands].sort(compareHandStrength);
   const index = sorted.indexOf(hand);

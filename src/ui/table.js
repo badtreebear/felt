@@ -1568,12 +1568,20 @@ export function createLiveGradingPanel(state) {
     const line = document.createElement("p");
     line.className = "live-grading-line";
 
+    // Colour by the three-way grade: good (win) and neutral (matched / no-cost
+    // review) are visually distinct, fail is the only red. Falls back to the
+    // binary matched read for any decision that predates the grade field.
+    const grade = feedback.grade
+      || (feedback.matched === null ? "neutral" : feedback.matched ? "neutral" : "fail");
+
     if (feedback.matched === null) {
       line.classList.add("live-grading-line--unknown");
-    } else if (feedback.matched) {
-      line.classList.add("live-grading-line--matched");
-    } else {
+    } else if (grade === "good") {
+      line.classList.add("live-grading-line--good");
+    } else if (grade === "fail") {
       line.classList.add("live-grading-line--missed");
+    } else {
+      line.classList.add("live-grading-line--neutral");
     }
 
     line.textContent = describeFeedback(feedback);
@@ -1590,15 +1598,24 @@ function createSessionScoreboard(session) {
   strip.className = "session-scoreboard";
 
   const decisions = Number(session.decisions) || 0;
-  const matched = Number(session.matched) || 0;
-  const accuracy = decisions > 0 ? Math.round((matched / decisions) * 100) : null;
+  const good = Number(session.good) || 0;
+  const neutral = Number(session.neutral) || 0;
+  const fail = Number(session.fail) || 0;
 
+  // Good / OK / Leak three-way tally. "OK" is the neutral bucket (matched the
+  // engine, or a reasonable-sizing review that cost no EV). Net is the signed
+  // bb sum -- only leaks move it.
   [
-    ["Graded", String(decisions)],
-    ["Matched", decisions > 0 ? `${matched}/${decisions} (${accuracy}%)` : "--"],
-    ["Net", formatSignedBb(session.evDeltaBb).replace(/^EV /, "")],
-  ].forEach(([label, value]) => {
+    ["Graded", String(decisions), null],
+    ["Good", decisions > 0 ? String(good) : "--", "good"],
+    ["OK", decisions > 0 ? String(neutral) : "--", "neutral"],
+    ["Leak", decisions > 0 ? String(fail) : "--", "fail"],
+    ["Net", formatSignedBb(session.evDeltaBb).replace(/^EV /, ""), null],
+  ].forEach(([label, value, kind]) => {
     const cell = document.createElement("div");
+    if (kind) {
+      cell.classList.add(`session-scoreboard__cell--${kind}`);
+    }
     const term = document.createElement("dt");
     const description = document.createElement("dd");
     term.textContent = label;
@@ -1630,6 +1647,12 @@ function describeFeedback(feedback) {
     const benefit = Number(feedback.benefitBb) || 0;
     if (benefit > 0) {
       return `${handLabel}${actionLabel}${spotLabel} - good play (${formatSignedBb(benefit)}).${note}`;
+    }
+    // A neutral "review" sizing matched on EV but isn't a chart match -- lead with
+    // a softer "OK" phrasing so it doesn't claim the engine recommended this exact
+    // line. True chart matches still read "matched the engine".
+    if (feedback.grade === "neutral" && note) {
+      return `${handLabel}${actionLabel}${spotLabel} - OK, no EV lost.${note}`;
     }
     return `${handLabel}${actionLabel}${spotLabel} - matched the engine (${recommendedLabel}).${note}`;
   }

@@ -1791,7 +1791,7 @@ input:focus-visible {
 
 .session-scoreboard {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin: 0;
 }
@@ -1799,6 +1799,19 @@ input:focus-visible {
 .session-scoreboard div {
   display: grid;
   gap: 2px;
+}
+
+/* Tint the value of each tally cell to match its grade colour. */
+.session-scoreboard__cell--good dd {
+  color: #8ed386;
+}
+
+.session-scoreboard__cell--neutral dd {
+  color: #e7cf73;
+}
+
+.session-scoreboard__cell--fail dd {
+  color: #d98279;
 }
 
 .session-scoreboard dt {
@@ -1823,9 +1836,17 @@ input:focus-visible {
   padding-left: 8px;
 }
 
-.live-grading-line--matched {
+.live-grading-line--matched,
+.live-grading-line--good {
   border-left-color: rgba(142, 211, 134, 0.9);
   color: #d6ffd1;
+}
+
+/* Neutral: a matched-but-worth-a-glance play (reasonable-sizing review). Amber
+   so it reads as "fine, but note it" rather than a pass or a fail. */
+.live-grading-line--neutral {
+  border-left-color: rgba(231, 207, 115, 0.85);
+  color: #f3e6bf;
 }
 
 .live-grading-line--missed {
@@ -2733,8 +2754,13 @@ input:focus-visible {
   color: var(--muted);
 }
 
-.live-grading-line--matched {
+.live-grading-line--matched,
+.live-grading-line--good {
   color: #d6ffd1;
+}
+
+.live-grading-line--neutral {
+  color: #f3e6bf;
 }
 
 .live-grading-line--missed {

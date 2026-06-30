@@ -422,12 +422,20 @@ export function betTipTopic(state) {
 function heroEngineTip(state) {
   const maths = state?.maths || {};
   const facingBet = Number(state?.hand?.toCall) > 0;
+  // First-in (unopened) preflop spots have a nominal amount to "call" (the blind
+  // to complete), but that is NOT facing aggression — the decision is raise-or-
+  // fold and pot odds are meaningless. `facingRaise` is the real "someone has
+  // voluntarily bet/raised" signal (same one the engine uses, `voluntaryRaiserSeat`).
+  const preflopWaiting = state?.hand?.preflop?.status === "waitingHero" && state?.hand?.street === "preflop";
+  const facingRaise = preflopWaiting
+    ? (state?.hand?.preflop?.voluntaryRaiserSeat ?? null) !== null
+    : facingBet;
   const numbers = [];
 
   if (Number.isFinite(Number(maths.heroEquity))) {
     numbers.push(`equity ${formatPercent(maths.heroEquity)}`);
   }
-  if (facingBet && Number.isFinite(Number(maths.requiredEquity))) {
+  if (facingRaise && Number.isFinite(Number(maths.requiredEquity))) {
     numbers.push(`pot odds ${formatPercent(maths.requiredEquity)}`);
   }
   if (maths.evCall !== null && maths.evCall !== undefined) {
@@ -482,9 +490,12 @@ function heroEngineTip(state) {
       }
     }
 
-    // Pot odds are the immediate price only. When the chart says fold but the
-    // raw price says call, name the gap instead of implying a call is fine.
-    if (facingBet && maths.verdict) {
+    // Pot odds are the immediate price only, and only meaningful when FACING A
+    // RAISE. First-in (unopened) spots are raise-or-fold — showing "calling is
+    // fold" off the 1bb-to-complete blind is misleading and contradicts the
+    // chart's open, so we suppress the pot-odds detail entirely when not facing
+    // a voluntary raise.
+    if (facingRaise && maths.verdict) {
       if (chart.action === "fold" && maths.verdict === "call") {
         detail = "The raw pot odds clear the bar, but out of position this hand realizes little of that equity and is easily dominated — so the disciplined play is to fold.";
       } else {
@@ -493,7 +504,9 @@ function heroEngineTip(state) {
     }
   }
 
-  if (!action && maths.verdict) {
+  // Last-resort verdict line: only when actually facing a raise. Never imply a
+  // "call" decision exists on an unopened first-in pot.
+  if (!action && facingRaise && maths.verdict) {
     action = `Engine verdict: calling is ${maths.verdict}.`;
   }
 

@@ -22,6 +22,7 @@ describe("normaliseDecision — preflop", () => {
       heroAction: "fold",
       recommended: "raise",
       matched: false,
+      grade: "fail",
       evDeltaBb: -1.2,
       reason: "open-folded too tight",
       rangeKind: "rfi",
@@ -40,6 +41,7 @@ describe("normaliseDecision — preflop", () => {
     });
 
     expect(result.matched).toBe(true);
+    expect(result.grade).toBe("neutral");
     expect(result.evDeltaBb).toBe(0);
     expect(result.reason).toBeNull();
   });
@@ -58,8 +60,29 @@ describe("normaliseDecision — preflop", () => {
     });
 
     expect(result.matched).toBe(false);
+    expect(result.grade).toBe("fail");
     expect(result.evDeltaBb).toBe(-0.4);
     expect(result.reason).toBe("defended too wide");
+  });
+
+  it("grades a chart leak as fail even when the EV estimate rounds to 0", () => {
+    // The 97o-call bug: a real chart deviation that came through with costBb 0
+    // must still count as a Leak (fail), so the scoreboard and the 'missed'
+    // line agree instead of showing OK + 'missed'.
+    const result = normaliseDecision({
+      street: "preflop",
+      spot: "BTN vs CO open - defend",
+      rangeKind: "vsRfi",
+      hand: "97o",
+      heroAction: "call",
+      recommended: "fold",
+      leak: true,
+      leakType: "defended too wide",
+      costBb: 0,
+    });
+
+    expect(result.matched).toBe(false);
+    expect(result.grade).toBe("fail");
   });
 });
 
@@ -98,6 +121,7 @@ describe("normaliseDecision — postflop EV (call/fold)", () => {
     });
 
     expect(result.matched).toBe(true);
+    expect(result.grade).toBe("good");
     expect(result.evDeltaBb).toBe(0);
     expect(result.reason).toBeNull();
   });
@@ -119,7 +143,10 @@ describe("normaliseDecision — postflop EV (call/fold)", () => {
 });
 
 describe("normaliseDecision — postflop sizing", () => {
-  it("keeps evDeltaBb at 0 for an oversized bet and surfaces the leak reason", () => {
+  it("grades a no-cost 'review' bet as neutral (not a leak) and surfaces the reason", () => {
+    // Regression: a review sizing sets leak:true but costBb:0 -- the tracker's
+    // intent is "flag neutrally, no cost". It must NOT read as a missed/failed
+    // decision. matched stays true (no EV lost) and grade is neutral.
     const result = normaliseDecision({
       street: "flop",
       spot: "CO flop bet 18 bb",
@@ -131,22 +158,65 @@ describe("normaliseDecision — postflop sizing", () => {
       costBb: 0,
     });
 
-    expect(result.matched).toBe(false);
+    expect(result.matched).toBe(true);
+    expect(result.grade).toBe("neutral");
     expect(result.evDeltaBb).toBe(0);
     expect(result.reason).toBe("oversized bet (review)");
   });
 
-  it("treats a sizing decision in range as matched and zero delta", () => {
+  it("grades a small-bet blocker review (the live-grading bug) as neutral, not a leak", () => {
+    // The exact shape behind the 63o min-bet that wrongly counted as a miss:
+    // leak:true, costBb:0, EV 0.0.
+    const result = normaliseDecision({
+      street: "turn",
+      spot: "BB turn bet 200 / 1bb",
+      hand: "63o",
+      heroAction: "bet",
+      recommended: "small bet -- size up only if ahead",
+      leak: true,
+      leakType: "small bet (review)",
+      evCall: 0,
+      costBb: 0,
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.grade).toBe("neutral");
+    expect(result.evDeltaBb).toBe(0);
+  });
+
+  it("grades a sizing decision in range as neutral with zero delta", () => {
     const result = normaliseDecision({
       street: "flop",
       spot: "CO flop bet 6 bb",
       hand: "AKo",
       heroAction: "bet",
       recommended: "bet",
+      leak: false,
+      good: false,
+      leakType: "reasonable sizing",
     });
 
     expect(result.matched).toBe(true);
+    expect(result.grade).toBe("neutral");
     expect(result.evDeltaBb).toBe(0);
+  });
+
+  it("still grades a real EV-cost commitment leak as a fail", () => {
+    const result = normaliseDecision({
+      street: "turn",
+      spot: "CO turn bet 30 bb",
+      hand: "KQo",
+      heroAction: "bet",
+      recommended: "pot control - respect the board",
+      leak: true,
+      leakType: "overvalued your hand",
+      evCall: -2.4,
+      costBb: 2.4,
+    });
+
+    expect(result.matched).toBe(false);
+    expect(result.grade).toBe("fail");
+    expect(result.evDeltaBb).toBe(-2.4);
   });
 });
 
@@ -195,6 +265,7 @@ describe("normaliseDecision — all-in commitment routing (got it in good/light)
     });
 
     expect(result.matched).toBe(true);
+    expect(result.grade).toBe("good");
     expect(result.evDeltaBb).toBe(0);          // not -56.5
     expect(result.benefitBb).toBe(56.5);       // value shown as a positive benefit
     expect(result.reason).toBe("got it in good");

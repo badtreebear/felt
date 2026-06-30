@@ -36,7 +36,7 @@ describe("coach snapshot", () => {
       },
     };
 
-    const snapshot = buildCoachSnapshot(state);
+    const snapshot = buildCoachSnapshot(state, { recommendation: "Call — pot odds met." });
 
     expect(snapshot).toEqual({
       seed: "coach-seed",
@@ -52,6 +52,9 @@ describe("coach snapshot", () => {
       board: ["Kh", "9h", "2s", "Qc"],
       pot: 24,
       toCall: 8,
+      facingRaise: true,
+      recommendation: "Call — pot odds met.",
+      villains: [],
       actionLog: [
         "preflop: LJ(hero) raises to 2.5",
         "preflop: HJ(station) calls 2.5",
@@ -64,5 +67,48 @@ describe("coach snapshot", () => {
         verdict: "fold",
       },
     });
+  });
+
+  it("marks a first-in preflop spot as facingRaise:false (raise-or-fold)", () => {
+    const state = {
+      config: { players: 6, heroSeat: 4, blinds: { sb: 0.5, bb: 1 }, seatProfiles: {} },
+      hand: {
+        seed: "s",
+        buttonSeat: 0,
+        street: "preflop",
+        holeCards: { 4: ["Qs", "Tc"] },
+        board: [],
+        pot: 1.5,
+        toCall: 1, // only the blind to complete
+        actionLog: [],
+        preflop: { status: "waitingHero", voluntaryRaiserSeat: null, effectiveStackBb: 100 },
+      },
+      maths: { heroEquity: 0.22, requiredEquity: 0.29, evCall: -46.7, verdict: "fold" },
+    };
+
+    const snapshot = buildCoachSnapshot(state, { recommendation: "Raise (open)." });
+    expect(snapshot.facingRaise).toBe(false);
+    expect(snapshot.recommendation).toBe("Raise (open).");
+  });
+
+  it("marks a facing-a-raise preflop spot as facingRaise:true", () => {
+    const state = {
+      config: { players: 6, heroSeat: 4, blinds: { sb: 0.5, bb: 1 }, seatProfiles: {} },
+      hand: {
+        seed: "s",
+        buttonSeat: 0,
+        street: "preflop",
+        holeCards: { 4: ["Qs", "Tc"] },
+        board: [],
+        pot: 4,
+        toCall: 2.5,
+        actionLog: [],
+        preflop: { status: "waitingHero", voluntaryRaiserSeat: 2, effectiveStackBb: 100 },
+      },
+      maths: { heroEquity: 0.4, requiredEquity: 0.3, evCall: 1.2, verdict: "call" },
+    };
+
+    const snapshot = buildCoachSnapshot(state, { recommendation: "Call." });
+    expect(snapshot.facingRaise).toBe(true);
   });
 });
