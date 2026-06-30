@@ -79,7 +79,7 @@ export function getRangeForSpot({ players, seat, position, hand, effBb }) {
       openingRange,
       `${contextTitle}, facing a ${raiseLabel}`,
       null,
-      `${position} is facing a ${raiseLabel} after the ${openerPosition} open - no chart for this re-raised spot yet. The ${position} vs ${openerPosition} defend chart only covers a single open.`,
+      `${position} is facing a ${raiseLabel} after the ${openerPosition} open. Re-raised pots swing heavily on exact bet sizing, stack depth, and the specific players, so a fixed chart would mislead more than help - that's why one isn't built in yet (the ${position} vs ${openerPosition} chart only covers a single open). For now: continue a tight, value-heavy range - premiums and hands that play well in position - and lean on the Bet tip and the equity / pot-odds tools for the read.`,
     );
   }
 
@@ -90,7 +90,7 @@ export function getRangeForSpot({ players, seat, position, hand, effBb }) {
       openingRange,
       `${contextTitle}, multiway`,
       null,
-      `Multiway pot - another player called the ${openerPosition} open, so the heads-up ${position} vs ${openerPosition} defend chart no longer applies.`,
+      `Multiway pot - another player called the ${openerPosition} open, so the heads-up ${position} vs ${openerPosition} defend chart no longer applies (those charts assume you're one-on-one with the opener). Multiway ranges tighten up - play stronger, more straightforward hands and rely on the Bet tip and equity tools here.`,
     );
   }
 

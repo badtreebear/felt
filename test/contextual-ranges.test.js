@@ -96,7 +96,10 @@ describe("getRangeForSpot", () => {
 
     expect(range.kind).toBe("fallback");
     expect(range.title).toContain("facing a 3-bet");
-    expect(range.message).toContain("no chart");
+    // The message explains the re-raised spot is deliberately uncharted and what
+    // to do instead. Assert on stable meaning, not exact marketing copy.
+    expect(range.message).toMatch(/facing a 3-bet/i);
+    expect(range.message).toMatch(/Bet tip|equity/i);
   });
 
   it("selects the continuation chart when the opener faces a 3-bet", () => {
