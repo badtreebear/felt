@@ -19,8 +19,23 @@ import { scorePostflopEvDecision, scorePostflopSizing } from "../src/tracker/pos
 import { normaliseDecision } from "../src/engine/decision-eval.js";
 
 // ---- tiny seeded RNG (mulberry32) so every hand is reproducible by seed ----
+//
+// The driver feeds SEQUENTIAL seeds (n, n+1, n+2, ...). Feeding those straight
+// into mulberry32 produces highly CORRELATED first outputs, so consecutive hands
+// would explore nearly-identical input space — making a big hand count look like
+// far more unique coverage than it is. We first hash the seed (splitmix32
+// avalanche) so adjacent counters map to uncorrelated RNG states. Reproducibility
+// is preserved: the same --seed always hashes to the same hand.
+function hashSeed(seed) {
+  let z = (seed >>> 0);
+  z = (z + 0x9E3779B9) >>> 0;
+  z = Math.imul(z ^ (z >>> 16), 0x21F0AAAD) >>> 0;
+  z = Math.imul(z ^ (z >>> 15), 0x735A2D97) >>> 0;
+  return (z ^ (z >>> 15)) >>> 0;
+}
+
 function rng(seed) {
-  let a = seed >>> 0;
+  let a = hashSeed(seed);
   return () => {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);

@@ -19,6 +19,23 @@ reach it):
 Verified it can fail: reintroducing the all-in sign-flip bug made it flag
 thousands of issues; with the fix in place it reports 0.
 
+What "0 issues" means (and doesn't): the fuzzer checks INTERNAL CONSISTENCY —
+every verdict is well-formed, finite, correctly-signed, correctly-labelled. It
+does NOT check whether the poker advice is CORRECT. A bug that produces a wrong-
+but-internally-consistent decision (e.g. a mis-set equity threshold) would pass.
+That's the phase-3 benchmark layer. So "0 issues over N hands" = "nothing
+malformed", a real but weaker statement than "advice is right".
+
+Seeding: the driver feeds sequential seeds; each is hashed (splitmix32) before
+seeding the RNG so adjacent hands are decorrelated. Without this, a big hand
+count overstates unique coverage (correlated neighbours re-tread the same space).
+Reproducibility is preserved — the same --seed always yields the same hand.
+
+Measured coverage (200k hands): every leakType fires in volume; tournament
+blinds outnumber cash ~3:2. Weak spots: the undersized/small-bet branches fire
+rarely (~0.5%) because random inputs seldom produce a small bet WITH an equity
+read — worth biasing the generator if that logic needs harder stressing.
+
 ## Phase 2 (todo): coverage audits — "where does the app go silent?"
 A different question from "is the advice correct?" — this is "is there advice/a
 table AT ALL?". No poker oracle needed; it's enumeration + gap reporting.
