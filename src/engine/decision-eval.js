@@ -61,7 +61,9 @@ export function normaliseDecision(decision) {
       matched,
       evDeltaBb: decision.leak && ev > 0 ? -roundBb(ev) : 0,
       benefitBb: decision.good ? roundBb(Math.abs(Number(decision.benefitBb) || ev)) : 0,
-      reason: decision.leak ? (leakType || "sizing review") : (decision.good ? leakType : null),
+      // Carry leakType through as the reason for leaks, good plays, AND neutral
+      // sizing ("reasonable sizing"), so live grading can show an acknowledging note.
+      reason: decision.leak ? (leakType || "sizing review") : (leakType || null),
       rangeKind,
       beats,
     };

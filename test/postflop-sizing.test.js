@@ -56,15 +56,23 @@ describe("scorePostflopSizing — overvalued-hand leak", () => {
     expect(decision.leakType).toBe("oversized bet (review)");
   });
 
-  it("returns nothing for a normal-sized bet", () => {
-    expect(scorePostflopSizing({
+  it("acknowledges a normal-sized bet neutrally (so it still gets graded)", () => {
+    // A normal-sized bet (ratio between undersized and oversized) has no leak,
+    // but must NOT return null — otherwise the decision is silently dropped and
+    // GRADED never increments. It's recorded as a neutral "reasonable sizing".
+    const decision = scorePostflopSizing({
       postflop: postflop(),
       action: "bet",
       committed: 10,
       allIn: false,
       commitmentEval: null,
       board: ["Ah", "9h", "2h"],
-    })).toBeNull();
+    });
+    expect(decision).not.toBeNull();
+    expect(decision.leak).toBe(false);
+    expect(decision.good).toBe(false);
+    expect(decision.leakType).toBe("reasonable sizing");
+    expect(decision.costBb).toBe(0);
   });
 
   it("flags a small bet neutrally when there's no equity read (analysis off)", () => {

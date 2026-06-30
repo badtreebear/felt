@@ -37,6 +37,7 @@ const LEAK_EXPLANATIONS = {
 // Coaching note for the good plays the tracker also surfaces, so positive
 // feedback reads naturally too rather than echoing the raw label.
 const GOOD_EXPLANATIONS = {
+  "reasonable sizing": "Bet/raise sizing looks reasonable here — no sizing leak flagged.",
   "good call (+EV)": "Your equity beat the price — a profitable call.",
   "good fold": "Correct lay-down: the price didn't justify your equity.",
   "got it in good": "You got the chips in ahead — keep getting it in here.",

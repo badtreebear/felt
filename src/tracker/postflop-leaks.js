@@ -192,7 +192,17 @@ export function scorePostflopSizing({ postflop, action, committed, allIn, commit
     }, bbSize);
   }
 
-  return null;
+  // Normal sizing band (between undersized and oversized, not all-in): there's no
+  // leak to flag, but we still ACKNOWLEDGE the decision so a graded session sees
+  // it (GRADED increments) rather than silently dropping a normal bet/raise. This
+  // is a neutral "looks reasonable" read — not a leak, not graded as +EV.
+  return baseDecision(postflop, action, commit, {
+    leak: false,
+    good: false,
+    leakType: "reasonable sizing",
+    recommended: action === "raise" ? "raise" : "bet",
+    costBb: 0,
+  }, bbSize);
 }
 
 function baseDecision(postflop, action, commit, extra, bbSize = 1) {
